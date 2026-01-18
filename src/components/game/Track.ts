@@ -49,8 +49,8 @@ export class Track extends Container {
         this.overlaySprite.zIndex = 100;
         this.addChild(this.overlaySprite);
 
-        // Store checkpoints
-        this.checkpoints = trackData.checkpoints;
+        // Store checkpoints - convert from Pyglet coords (Y=0 at bottom) to PixiJS (Y=0 at top)
+        this.checkpoints = trackData.checkpoints.map(([x, y]) => [x, this.config.height - y] as [number, number]);
 
         // Build collision map from background image (load directly by path)
         await this.buildCollisionMap(trackIndex);
@@ -95,7 +95,6 @@ export class Track extends Container {
 
         // Build map matrix
         this.mapMatrix = [];
-        const { roadColor } = this.config;
 
         for (let y = 0; y < this.config.height; y++) {
             const row: number[] = [];
@@ -106,12 +105,13 @@ export class Track extends Container {
                 const b = pixels[i + 2];
                 const a = pixels[i + 3];
 
-                // Check if pixel matches road color
-                const isRoad =
-                    r === roadColor.r &&
-                    g === roadColor.g &&
-                    b === roadColor.b &&
-                    a === roadColor.a;
+                // Check if pixel is a dark gray color (road)
+                // Roads are typically dark gray with RGB values close together
+                const isGray = Math.abs(r - g) < 15 && Math.abs(g - b) < 15 && Math.abs(r - b) < 15;
+                const isDark = r < 120 && g < 120 && b < 120;
+                const isOpaque = a > 200;
+                const isRoad = isGray && isDark && isOpaque;
+
                 row.push(isRoad ? 1 : 0);
             }
             this.mapMatrix.push(row);

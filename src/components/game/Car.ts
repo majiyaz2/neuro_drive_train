@@ -75,10 +75,11 @@ export class Car extends Container {
         this.body.anchor.set(this.config.anchorX, this.config.anchorY);
         this.addChild(this.body);
 
-        // Position at first checkpoint
+        // Position at first checkpoint with random Y offset
         if (this.track.checkpoints.length > 0) {
             const [startX, startY] = this.track.checkpoints[0];
-            this.position.set(startX, startY);
+            const randomYOffset = (Math.random() - 0.5) * 43; // Random offset between -20 and +20
+            this.position.set(startX, startY + randomYOffset);
         }
     }
 
