@@ -52,14 +52,14 @@ export class Track extends Container {
         // Store checkpoints
         this.checkpoints = trackData.checkpoints;
 
-        // Build collision map from background image
-        await this.buildCollisionMap(backgroundTexture);
+        // Build collision map from background image (load directly by path)
+        await this.buildCollisionMap(trackIndex);
 
         // Enable sorting for z-index
         this.sortableChildren = true;
     }
 
-    private async buildCollisionMap(texture: Texture): Promise<void> {
+    private async buildCollisionMap(trackIndex: number): Promise<void> {
         // Create a canvas to extract pixel data
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
@@ -68,15 +68,25 @@ export class Track extends Container {
         canvas.width = this.config.width;
         canvas.height = this.config.height;
 
-        // Draw texture to canvas
+        // Load image directly from known path
         const image = new Image();
-        image.src = (texture.source as any).resource?.src || '';
+        image.crossOrigin = 'anonymous';
+        image.src = `/assets/tracks/track${trackIndex}.png`;
 
-        await new Promise<void>((resolve) => {
+        await new Promise<void>((resolve, reject) => {
             image.onload = () => {
                 ctx.drawImage(image, 0, 0);
                 resolve();
             };
+            image.onerror = (err) => {
+                console.error('Failed to load image for collision map:', err);
+                reject(new Error('Failed to load track image'));
+            };
+            // Handle case where image is already cached
+            if (image.complete && image.naturalWidth > 0) {
+                ctx.drawImage(image, 0, 0);
+                resolve();
+            }
         });
 
         // Extract pixel data
