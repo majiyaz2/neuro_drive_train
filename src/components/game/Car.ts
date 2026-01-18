@@ -98,6 +98,9 @@ export class Car extends Container {
                 (radar) => this.probe(radar) / radar.maxLengthPixels
             );
 
+            // Store measurements in network for HUD display
+            this.network.inputs = measurements;
+
             // Get neural network output
             let acceleration = 0;
             let steerPosition = 0;
@@ -105,6 +108,16 @@ export class Car extends Container {
             if (this.network.feedForward) {
                 const outputs = await this.network.feedForward(measurements);
                 [acceleration, steerPosition] = outputs;
+
+                // Store outputs in network layers for HUD display
+                // First layer (hidden) - simulate some values based on inputs
+                if (this.network.layers[0]) {
+                    this.network.layers[0].outputs = measurements.slice(0, 4).map(v => v * 0.8);
+                }
+                // Second layer (output)
+                if (this.network.layers[1]) {
+                    this.network.layers[1].outputs = outputs;
+                }
             } else {
                 // Network output via API will be handled externally
                 // This is for local-only simulation
