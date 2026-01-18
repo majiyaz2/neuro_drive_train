@@ -158,7 +158,7 @@ export class Car extends Container {
         let x2 = startX;
         let y2 = startY;
 
-        const radians = this.degreesToRadians(this.carRotation + radar.angle);
+        const radians = this.degreesToRadians(this.carRotation + radar.radarAngle);
 
         while (probeLength < radar.maxLengthPixels && this.track.isRoad(x2, y2)) {
             probeLength += 2;
@@ -166,7 +166,10 @@ export class Car extends Container {
             y2 = startY + probeLength * Math.sin(radians);
         }
 
-        radar.updateBeam(startX, startY, x2, y2, probeLength);
+        // Convert to local coordinates (radar is child of car, so draw relative to 0,0)
+        const localEndX = x2 - startX;
+        const localEndY = y2 - startY;
+        radar.updateBeam(0, 0, localEndX, localEndY, probeLength);
 
         if (probeLength < this.smallestEdgeDistance) {
             this.smallestEdgeDistance = probeLength;

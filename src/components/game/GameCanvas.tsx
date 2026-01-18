@@ -55,7 +55,7 @@ function createDemoNetwork(): SerializableNetwork {
             const steer = (rightRadars - leftRadars) * 0.5;
             // Accelerate if front is clear
             const accelerate = inputs[2] > 0.3 ? 1 : 0;
-            return [accelerate, steer];
+            return [accelerate*2, -steer];
         },
     };
 }
