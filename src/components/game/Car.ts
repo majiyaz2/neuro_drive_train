@@ -17,7 +17,7 @@ export interface CarConfig {
 const DEFAULT_CONFIG: CarConfig = {
     maxSpeed: 6.0,
     slippingSpeedRatio: 0.75,
-    anchorX: 0.5,
+    anchorX: 0.1, // Pivot around the rear axle
     anchorY: 0.5,
     radarAngles: [-70, -35, 0, 35, 70],
     deceleration: 0.05,
@@ -61,9 +61,10 @@ export class Car extends Container {
         this.track = track;
         this.config = { ...DEFAULT_CONFIG, ...config };
 
-        // Create radars
+        // Create radars and position them at the front of the car
         for (const angle of this.config.radarAngles) {
             const radar = new Radar(angle);
+            radar.x = 40; // Position radars at the front of the car (relative to rear pivot)
             this.radars.push(radar);
             this.addChild(radar);
         }
@@ -144,7 +145,8 @@ export class Car extends Container {
                 steerImpact = 1;
             }
 
-            this.carRotation -= steerPosition * this.speed * steerImpact * renderSpeed * 3;
+            // Steer right (positive) should increase rotation in CW system
+            this.carRotation += steerPosition * this.speed * steerImpact * renderSpeed * 3;
         } else {
             // Gradual slowdown when not running
             this.speed -= 0.05 * this.speed;
@@ -156,8 +158,9 @@ export class Car extends Container {
             this.shutOff();
         }
 
-        // Update visual rotation (PixiJS uses radians)
-        this.body.rotation = -this.degreesToRadians(this.carRotation);
+        // Update visual rotation on the container (PixiJS uses radians)
+        // Rotate the entire container so the car turns as a unit
+        this.rotation = this.degreesToRadians(this.carRotation);
 
         // Update position
         const radians = this.degreesToRadians(this.carRotation);
@@ -167,23 +170,33 @@ export class Car extends Container {
 
     private probe(radar: Radar): number {
         let probeLength = 0;
-        const startX = this.position.x;
-        const startY = this.position.y;
+
+        // Use the front of the car (radar location) as the probe starting point
+        // We calculate this based on the car's orientation and the radar's offset
+        const radians = this.degreesToRadians(this.carRotation);
+        const startX = this.position.x + 40 * Math.cos(radians);
+        const startY = this.position.y + 40 * Math.sin(radians);
+
         let x2 = startX;
         let y2 = startY;
 
-        const radians = this.degreesToRadians(this.carRotation + radar.radarAngle);
+        // Probing needs global coordinates
+        const globalRadians = this.degreesToRadians(this.carRotation + radar.radarAngle);
 
         while (probeLength < radar.maxLengthPixels && this.track.isRoad(x2, y2)) {
             probeLength += 2;
-            x2 = startX + probeLength * Math.cos(radians);
-            y2 = startY + probeLength * Math.sin(radians);
+            x2 = startX + probeLength * Math.cos(globalRadians);
+            y2 = startY + probeLength * Math.sin(globalRadians);
         }
 
-        // Convert to local coordinates (radar is child of car, so draw relative to 0,0)
-        const localEndX = x2 - startX;
-        const localEndY = y2 - startY;
-        radar.updateBeam(0, 0, localEndX, localEndY, probeLength);
+        // For drawing, calculate local coordinates relative to the car's orientation
+        // Since the car container itself is rotated, we draw the beam at its relative angle
+        const localRadians = this.degreesToRadians(radar.radarAngle);
+        const lx = probeLength * Math.cos(localRadians);
+        const ly = probeLength * Math.sin(localRadians);
+
+        // Draw from 0,0 (radar container center) to the calculated local endpoint
+        radar.updateBeam(0, 0, lx, ly, probeLength);
 
         if (probeLength < this.smallestEdgeDistance) {
             this.smallestEdgeDistance = probeLength;

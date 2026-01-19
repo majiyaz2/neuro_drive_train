@@ -7,7 +7,7 @@ import { Track } from './Track';
 import { Car, SerializableNetwork } from './Car';
 import { HUD } from './HUD';
 import { Network } from '@/lib/network';
-import { Trainer, type TrainingConfig } from '@/lib/trainer';
+import { BrowserTrainer as Trainer, type TrainingConfig } from '@/lib/browserTrainer';
 
 export interface GameCanvasProps {
     trackIndex?: number;
@@ -198,16 +198,21 @@ export function GameCanvas({
                     // Update car (includes radar probing and neural network inference)
                     await car.update(deltaTime);
 
-                    // Check road collision
-                    if (!track.isRoad(car.position.x, car.position.y)) {
+                    // Calculate front position (where radars are) for better collision and checkpoint detection
+                    const carFacing = car.rotation;
+                    const frontX = car.position.x + 40 * Math.cos(carFacing);
+                    const frontY = car.position.y + 40 * Math.sin(carFacing);
+
+                    // Check road collision for both front and rear
+                    if (!track.isRoad(car.position.x, car.position.y) || !track.isRoad(frontX, frontY)) {
                         car.shutOff();
                     }
 
-                    // Check checkpoints
+                    // Check checkpoints (using front of car for better feel as it's the "leading" edge)
                     for (let i = 0; i < track.checkpoints.length; i++) {
                         const [cx, cy] = track.checkpoints[i];
                         const distance = Math.sqrt(
-                            Math.pow(cx - car.position.x, 2) + Math.pow(cy - car.position.y, 2)
+                            Math.pow(cx - frontX, 2) + Math.pow(cy - frontY, 2)
                         );
                         if (distance < 40) {
                             car.hitCheckpoint(i);
