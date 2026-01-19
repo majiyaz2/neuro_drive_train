@@ -6,10 +6,13 @@ import { Application, Container, Graphics, Text, TextStyle } from 'pixi.js';
 import { Track } from './Track';
 import { Car, SerializableNetwork } from './Car';
 import { HUD } from './HUD';
+import { Network } from '@/lib/network';
+import { Trainer, type TrainingConfig } from '@/lib/trainer';
 
 export interface GameCanvasProps {
     trackIndex?: number;
     carImagePaths?: string[];
+    trainingConfig?: Partial<TrainingConfig>;
     onSimulationComplete?: (networks: SerializableNetwork[]) => void;
 }
 
@@ -27,35 +30,25 @@ const DEFAULT_CONFIG: SimulationConfig = {
     frameDuration: 1 / 60,
 };
 
-// Demo network for testing when backend is not available
-function createDemoNetwork(): SerializableNetwork {
+/**
+ * Convert a Network instance from lib to SerializableNetwork for Car component.
+ * Creates a closure over the network to provide feedForward functionality.
+ */
+function networkToSerializable(network: Network): SerializableNetwork {
     return {
-        dimensions: [5, 4, 2],
-        hasReachedGoal: false,
-        smallestEdgeDistance: 100,
-        highestCheckpoint: 0,
-        layers: [
-            {
-                outputs: [0, 0, 0, 0],
-                weights: Array(5).fill(Array(4).fill(0.5)),
-                highestCheckpoint: 0,
-            },
-            {
-                outputs: [0, 0],
-                weights: Array(4).fill(Array(2).fill(0.5)),
-                highestCheckpoint: 0,
-            },
-        ],
-        inputs: [0, 0, 0, 0, 0],
-        // Simple demo feedForward - always accelerate and steer based on radar
+        dimensions: network.dimensions,
+        hasReachedGoal: network.hasReachedGoal,
+        smallestEdgeDistance: network.smallestEdgeDistance,
+        highestCheckpoint: network.highestCheckpoint,
+        layers: network.layers.map(layer => ({
+            outputs: [...layer.outputs],
+            weights: layer.weights.map(w => [...w]),
+            highestCheckpoint: layer.highestCheckpoint,
+        })),
+        inputs: [...network.inputs],
         feedForward: async (inputs: number[]) => {
-            // Basic steering logic: turn towards the side with more open space
-            const leftRadars = (inputs[0] + inputs[1]) / 2;
-            const rightRadars = (inputs[3] + inputs[4]) / 2;
-            const steer = (rightRadars - leftRadars) * 0.5;
-            // Accelerate if front is clear
-            const accelerate = inputs[2] > 0.3 ? 1 : 0;
-            return [accelerate*2, -steer];
+            const outputs = network.feedForward(inputs);
+            return outputs ?? [0, 0];
         },
     };
 }
@@ -69,12 +62,15 @@ export function GameCanvas({
         '/assets/cars/car3.png',
         '/assets/cars/car4.png',
     ],
+    trainingConfig,
     onSimulationComplete,
 }: GameCanvasProps) {
     const containerRef = useRef<HTMLDivElement>(null);
     const appRef = useRef<Application | null>(null);
+    const trainerRef = useRef<Trainer | null>(null);
     const [isSimulating, setIsSimulating] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
+    const [simulationRound, setSimulationRound] = useState(1);
     const abortRef = useRef(false);
 
     // Initialize PixiJS Application
@@ -237,12 +233,28 @@ export function GameCanvas({
                 if (populationAlive === 0) {
                     app.ticker.remove(updateLoop);
 
-                    // Update network stats
+                    // Update network stats from simulation results
                     for (const car of cars) {
                         car.network.highestCheckpoint = car.lastCheckpointPassed;
                         car.network.smallestEdgeDistance = car.smallestEdgeDistance;
                         car.network.hasReachedGoal =
                             car.lastCheckpointPassed === track.checkpoints.length - 1;
+                    }
+
+                    // Sync stats back to trainer networks and run evolution
+                    if (trainerRef.current) {
+                        for (let i = 0; i < cars.length; i++) {
+                            const trainerNetwork = trainerRef.current.networks[i];
+                            if (trainerNetwork) {
+                                trainerNetwork.highestCheckpoint = cars[i].network.highestCheckpoint;
+                                trainerNetwork.smallestEdgeDistance = cars[i].network.smallestEdgeDistance;
+                                trainerNetwork.hasReachedGoal = cars[i].network.hasReachedGoal;
+                            }
+                        }
+
+                        // Run evolution and create next generation
+                        trainerRef.current.evolveAndSave();
+                        setSimulationRound(trainerRef.current.simulationRound);
                     }
 
                     // Callback with updated networks
@@ -256,18 +268,22 @@ export function GameCanvas({
         [trackIndex, carImagePaths, onSimulationComplete]
     );
 
-    // Start training with demo networks
+    // Start training with real networks from Trainer
     const startTraining = useCallback(async () => {
         setIsSimulating(true);
 
-        // Create demo networks for testing (5 cars)
-        const networks: SerializableNetwork[] = Array(5)
-            .fill(null)
-            .map(() => createDemoNetwork());
+        // Create or reuse trainer (loads chromosomes from storage)
+        if (!trainerRef.current) {
+            trainerRef.current = new Trainer(trainingConfig);
+            setSimulationRound(trainerRef.current.simulationRound);
+        }
+
+        // Convert trainer networks to SerializableNetwork for Car component
+        const networks = trainerRef.current.networks.map(networkToSerializable);
 
         // Run simulation
-        await simulateGeneration(networks, 1);
-    }, [simulateGeneration]);
+        await simulateGeneration(networks, simulationRound);
+    }, [simulateGeneration, simulationRound, trainingConfig]);
 
     // Keyboard handler for ESC to abort
     useEffect(() => {
