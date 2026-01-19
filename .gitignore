@@ -40,3 +40,5 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 Migration.md
+migration_network.md
+presentation.md
