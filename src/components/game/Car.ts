@@ -29,6 +29,7 @@ export interface SerializableNetwork {
     hasReachedGoal: boolean;
     smallestEdgeDistance: number;
     highestCheckpoint: number;
+    distanceCovered: number;
     layers: {
         outputs: number[];
         weights: number[][];
@@ -50,6 +51,7 @@ export class Car extends Container {
     isRunning: boolean = true;
     lastCheckpointPassed: number = 0;
     smallestEdgeDistance: number = 100;
+    distanceCovered: number = 0;
 
     constructor(
         network: SerializableNetwork,
@@ -106,10 +108,11 @@ export class Car extends Container {
             // Get neural network output
             let acceleration = 0;
             let steerPosition = 0;
+            let brake = 0;
 
             if (this.network.feedForward) {
                 const outputs = await this.network.feedForward(measurements);
-                [acceleration, steerPosition] = outputs;
+                [acceleration, steerPosition, brake] = outputs;
 
                 // Store outputs in network layers for HUD display
                 // First layer (hidden) - simulate some values based on inputs
@@ -125,6 +128,12 @@ export class Car extends Container {
                 // This is for local-only simulation
             }
 
+            // Handle braking - if brake output is high, decrease speed faster
+            if (brake > 0.5) {
+                this.speed -= this.config.deceleration * 3; // Brake at 3x deceleration
+            }
+
+            // Handle acceleration
             if (acceleration > 0) {
                 this.speed += this.config.acceleration;
             }
@@ -132,6 +141,9 @@ export class Car extends Container {
             // Clamp speed
             if (this.speed > this.config.maxSpeed) {
                 this.speed = this.config.maxSpeed;
+            }
+            if (this.speed < 0) {
+                this.speed = 0;
             }
 
             // Calculate steer impact based on speed
@@ -152,8 +164,8 @@ export class Car extends Container {
             this.speed -= 0.05 * this.speed;
         }
 
-        // Stop completely if speed is too low
-        if (this.speed < 0) {
+        // Shut off engine if speed drops to zero (penalty)
+        if (this.speed <= 0 && this.isRunning) {
             this.speed = 0.0;
             this.shutOff();
         }
@@ -162,10 +174,17 @@ export class Car extends Container {
         // Rotate the entire container so the car turns as a unit
         this.rotation = this.degreesToRadians(this.carRotation);
 
-        // Update position
+        // Update position and track distance
         const radians = this.degreesToRadians(this.carRotation);
-        this.position.x += this.speed * renderSpeed * Math.cos(radians);
-        this.position.y += this.speed * renderSpeed * Math.sin(radians);
+        const dx = this.speed * renderSpeed * Math.cos(radians);
+        const dy = this.speed * renderSpeed * Math.sin(radians);
+        this.position.x += dx;
+        this.position.y += dy;
+
+        // Accumulate distance covered
+        if (this.isRunning) {
+            this.distanceCovered += Math.abs(this.speed * renderSpeed);
+        }
     }
 
     private probe(radar: Radar): number {

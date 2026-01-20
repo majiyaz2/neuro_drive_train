@@ -4,15 +4,55 @@ import type { RankableChromosome } from "./network";
 export class Evolution {
     populationCount: number;
     keepCount: number;
-    mutationRate: number;
+    baseMutationRate: number;
+    generation: number = 0;
 
     constructor(populationCount: number, keepCount: number, mutationRate: number = 0.2) {
         this.populationCount = populationCount;
         this.keepCount = keepCount;
-        this.mutationRate = mutationRate;
+        this.baseMutationRate = mutationRate;
+    }
+
+    /**
+     * Generate a random number from a Gaussian (normal) distribution
+     * using the Box-Muller transform.
+     * @param mean - The mean of the distribution (default 0)
+     * @param stdDev - The standard deviation (default 1)
+     */
+    private gaussianRandom(mean: number = 0, stdDev: number = 1): number {
+        const u1 = Math.random();
+        const u2 = Math.random();
+        const z0 = Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
+        return z0 * stdDev + mean;
+    }
+
+    /**
+     * Calculate adaptive mutation rate based on generation.
+     * Starts strong and decreases over time, but never below a minimum.
+     */
+    private getAdaptiveMutationRate(): number {
+        // Decay factor: mutation rate decreases as generations increase
+        // Formula: rate = base * (1 / (1 + generation * 0.02))
+        // This ensures rate decreases but never goes below ~25% of base rate
+        const decayFactor = 1 / (1 + this.generation * 0.02);
+        const minRate = this.baseMutationRate * 0.25;
+        return Math.max(minRate, this.baseMutationRate * decayFactor);
+    }
+
+    /**
+     * Calculate adaptive mutation strength (how much to perturb weights).
+     * Decreases over time for finer adjustments in later generations.
+     */
+    private getAdaptiveMutationStrength(): number {
+        // Start with larger perturbations, become more precise over time
+        // Range: 0.5 (early) to 0.1 (late generations)
+        const strength = 0.5 / (1 + this.generation * 0.05);
+        return Math.max(0.1, strength);
     }
 
     execute(rankableChromosomes: RankableChromosome[]): number[][] {
+        this.generation++;
+
         const sortedChromosomes = [...rankableChromosomes].sort(compareChromosomes).map(c => c.chromosome);
         const keepChromosomes = sortedChromosomes.slice(0, this.keepCount);
 
@@ -41,11 +81,23 @@ export class Evolution {
             offspring.push(child);
         }
 
-        // Mutation - apply mutation to non-elite offspring
+        // Adaptive mutation parameters
+        const mutationRate = this.getAdaptiveMutationRate();
+        const mutationStrength = this.getAdaptiveMutationStrength();
+        const replacementChance = 0.15; // 15% chance to fully replace instead of perturb
+
+        // Mutation - apply adaptive mutation to non-elite offspring
         for (let i = this.keepCount; i < offspring.length; i++) {
             for (let j = 0; j < offspring[i]!.length; j++) {
-                if (Math.random() < this.mutationRate) {
-                    offspring[i]![j] = Math.random() * 2 - 1;
+                if (Math.random() < mutationRate) {
+                    if (Math.random() < replacementChance) {
+                        // Full replacement: completely random new weight (exploration)
+                        offspring[i]![j] = Math.random() * 2 - 1;
+                    } else {
+                        // Gaussian perturbation: add noise to existing weight (exploitation)
+                        const perturbation = this.gaussianRandom(0, mutationStrength);
+                        offspring[i]![j] = Math.max(-1, Math.min(1, offspring[i]![j]! + perturbation));
+                    }
                 }
             }
         }
@@ -53,4 +105,10 @@ export class Evolution {
         return offspring;
     }
 
+    /**
+     * Reset generation counter (call when restarting training)
+     */
+    resetGeneration(): void {
+        this.generation = 0;
+    }
 }
