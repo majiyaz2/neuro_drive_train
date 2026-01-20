@@ -25,7 +25,6 @@ export default function Home() {
   const [parameters, setParameters] = useState<TrainingParameters>({
     populationSize: 50,
     mutationRate: 0.05,
-    hiddenLayers: '2-layer',
     trackIndex: 2,
     keepCount: 10,
     maxIterations: 100,
@@ -123,7 +122,8 @@ export default function Home() {
               trainingConfig={{
                 maxGenerationIterations: parameters.maxIterations,
                 populationCount: parameters.populationSize,
-                keepCount: parameters.keepCount
+                keepCount: parameters.keepCount,
+                mutationRate: parameters.mutationRate
               }}
               onLoadingChange={setIsLoading}
               onSimulatingChange={setIsSimulating}

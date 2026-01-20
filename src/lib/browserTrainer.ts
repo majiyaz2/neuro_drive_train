@@ -12,13 +12,15 @@ export interface TrainingConfig {
     populationCount: number;
     keepCount: number;
     maxGenerationIterations: number;
+    mutationRate: number;
 }
 
 const DEFAULT_CONFIG: TrainingConfig = {
     networkDimensions: [5, 4, 2],
     populationCount: 10,
     keepCount: 2,
-    maxGenerationIterations: 10
+    maxGenerationIterations: 10,
+    mutationRate: 0.05
 };
 
 export class BrowserTrainer {
@@ -88,7 +90,8 @@ export class BrowserTrainer {
         );
         this.evolution = new Evolution(
             this.config.populationCount,
-            this.config.keepCount
+            this.config.keepCount,
+            this.config.mutationRate
         );
         this.storage = new BrowserStorage("chromosomes");
 
@@ -119,7 +122,8 @@ export class BrowserTrainer {
             );
             this.evolution = new Evolution(
                 this.config.populationCount,
-                this.config.keepCount
+                this.config.keepCount,
+                this.config.mutationRate
             );
 
             // Load best chromosomes from localStorage if available
@@ -132,7 +136,8 @@ export class BrowserTrainer {
             this.config = newConfig;
             this.evolution = new Evolution(
                 this.config.populationCount,
-                this.config.keepCount
+                this.config.keepCount,
+                this.config.mutationRate
             );
         }
 

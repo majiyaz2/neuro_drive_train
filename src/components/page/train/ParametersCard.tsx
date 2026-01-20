@@ -16,7 +16,6 @@ import { Check, Map } from 'lucide-react';
 export interface TrainingParameters {
     populationSize: number;
     mutationRate: number;
-    hiddenLayers: string;
     trackIndex: number;
     keepCount: number;
     maxIterations: number;
@@ -41,7 +40,6 @@ export function ParametersCard({
         return (
             localParams.populationSize !== parameters.populationSize ||
             localParams.mutationRate !== parameters.mutationRate ||
-            localParams.hiddenLayers !== parameters.hiddenLayers ||
             localParams.trackIndex !== parameters.trackIndex ||
             localParams.keepCount !== parameters.keepCount ||
             localParams.maxIterations !== parameters.maxIterations
@@ -65,6 +63,35 @@ export function ParametersCard({
                 </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+                {/* Track/Map Selector */}
+                <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-sm">
+                        <Map className="size-4" />
+                        <span>Track</span>
+                    </div>
+                    <Select
+                        value={String(localParams.trackIndex)}
+                        disabled={disabled}
+                        onValueChange={(value) =>
+                            setLocalParams((prev) => ({
+                                ...prev,
+                                trackIndex: parseInt(value, 10),
+                            }))
+                        }
+                    >
+                        <SelectTrigger>
+                            <SelectValue placeholder="Select track" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="0">Track 1 - Oval</SelectItem>
+                            <SelectItem value="1">Track 2 - S-Curve</SelectItem>
+                            <SelectItem value="2">Track 3 - Circuit</SelectItem>
+                            <SelectItem value="3">Track 4 - Complex</SelectItem>
+                            <SelectItem value="4">Track 5 - Advanced</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+
                 {/* Population Size */}
                 <div className="space-y-2">
                     <div className="flex justify-between text-sm">
@@ -161,59 +188,9 @@ export function ParametersCard({
                             }))
                         }
                     />
-                </div>
-
-                {/* Hidden Layers */}
-                <div className="space-y-2">
-                    <span className="text-sm">Hidden Layers</span>
-                    <Select
-                        value={localParams.hiddenLayers}
-                        disabled={disabled}
-                        onValueChange={(value) =>
-                            setLocalParams((prev) => ({
-                                ...prev,
-                                hiddenLayers: value,
-                            }))
-                        }
-                    >
-                        <SelectTrigger>
-                            <SelectValue placeholder="Select layers" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="1-layer">1 Layer (Simple)</SelectItem>
-                            <SelectItem value="2-layer">2 Layers (Standard)</SelectItem>
-                            <SelectItem value="3-layer">3 Layers (Deep)</SelectItem>
-                        </SelectContent>
-                    </Select>
-                </div>
-
-                {/* Track/Map Selector */}
-                <div className="space-y-2">
-                    <div className="flex items-center gap-2 text-sm">
-                        <Map className="size-4" />
-                        <span>Track</span>
-                    </div>
-                    <Select
-                        value={String(localParams.trackIndex)}
-                        disabled={disabled}
-                        onValueChange={(value) =>
-                            setLocalParams((prev) => ({
-                                ...prev,
-                                trackIndex: parseInt(value, 10),
-                            }))
-                        }
-                    >
-                        <SelectTrigger>
-                            <SelectValue placeholder="Select track" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="0">Track 1 - Oval</SelectItem>
-                            <SelectItem value="1">Track 2 - S-Curve</SelectItem>
-                            <SelectItem value="2">Track 3 - Circuit</SelectItem>
-                            <SelectItem value="3">Track 4 - Complex</SelectItem>
-                            <SelectItem value="4">Track 5 - Advanced</SelectItem>
-                        </SelectContent>
-                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                        Chance of random gene changes per offspring
+                    </p>
                 </div>
 
                 {/* Apply Button */}
