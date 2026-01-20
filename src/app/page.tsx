@@ -129,7 +129,7 @@ export default function Home() {
               onSimulatingChange={setIsSimulating}
               onGenerationComplete={(gen, fitness) => {
                 setFitnessHistory((prev) => [...prev, { generation: gen, fitness }]);
-                addLog(`Fitness score: ${fitness.toFixed(1)}%`);
+                addLog(`Best distance: ${fitness.toFixed(0)} px`);
               }}
             />
           </div>

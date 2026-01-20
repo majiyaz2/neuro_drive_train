@@ -53,6 +53,7 @@ function networkToSerializable(network: Network): SerializableNetwork {
         hasReachedGoal: network.hasReachedGoal,
         smallestEdgeDistance: network.smallestEdgeDistance,
         highestCheckpoint: network.highestCheckpoint,
+        distanceCovered: network.distanceCovered,
         layers: network.layers.map(layer => ({
             outputs: [...layer.outputs],
             weights: layer.weights.map(w => [...w]),
@@ -61,7 +62,7 @@ function networkToSerializable(network: Network): SerializableNetwork {
         inputs: [...network.inputs],
         feedForward: async (inputs: number[]) => {
             const outputs = network.feedForward(inputs);
-            return outputs ?? [0, 0];
+            return outputs ?? [0, 0, 0];
         },
     };
 }
@@ -300,6 +301,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(function Ga
                 for (const car of cars) {
                     car.network.highestCheckpoint = car.lastCheckpointPassed;
                     car.network.smallestEdgeDistance = car.smallestEdgeDistance;
+                    car.network.distanceCovered = car.distanceCovered;
                     car.network.hasReachedGoal =
                         car.lastCheckpointPassed === track.checkpoints.length - 1;
                 }
@@ -311,6 +313,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(function Ga
                         if (trainerNetwork) {
                             trainerNetwork.highestCheckpoint = cars[i].network.highestCheckpoint;
                             trainerNetwork.smallestEdgeDistance = cars[i].network.smallestEdgeDistance;
+                            trainerNetwork.distanceCovered = cars[i].distanceCovered;
                             trainerNetwork.hasReachedGoal = cars[i].network.hasReachedGoal;
                         }
                     }
@@ -319,11 +322,9 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(function Ga
                     trainerRef.current.evolveAndSave();
                     setSimulationRound(trainerRef.current.simulationRound);
 
-                    // Report generation completion with best fitness
-                    const bestCheckpoint = Math.max(...cars.map(c => c.lastCheckpointPassed));
-                    const totalCheckpoints = track.checkpoints.length;
-                    const bestFitness = (bestCheckpoint / totalCheckpoints) * 100;
-                    onGenerationComplete?.(trainerRef.current.simulationRound, bestFitness);
+                    // Report generation completion with best fitness (distance covered)
+                    const bestDistance = Math.max(...cars.map(c => c.distanceCovered));
+                    onGenerationComplete?.(trainerRef.current.simulationRound, bestDistance);
                 }
 
                 // Callback with updated networks

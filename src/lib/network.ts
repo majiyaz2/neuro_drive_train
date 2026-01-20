@@ -25,6 +25,7 @@ export interface RankableChromosome {
     chromosome: number[];
     smallestEdgeDistance: number;
     highestCheckpoint: number;
+    distanceCovered: number;
 }
 
 export class Network {
@@ -32,6 +33,7 @@ export class Network {
     hasReachedGoal: boolean = false;
     smallestEdgeDistance: number = 0;
     highestCheckpoint: number = 0;
+    distanceCovered: number = 0;
     layers: Layer[] = [];
     inputs: number[] = [];
 
@@ -64,7 +66,8 @@ export class Network {
         return {
             chromosome,
             smallestEdgeDistance: this.smallestEdgeDistance,
-            highestCheckpoint: this.highestCheckpoint
+            highestCheckpoint: this.highestCheckpoint,
+            distanceCovered: this.distanceCovered
         }
     }
 
@@ -89,8 +92,14 @@ export class Network {
 }
 
 export function compareChromosomes(a: RankableChromosome, b: RankableChromosome): number {
-    if (a.highestCheckpoint == b.highestCheckpoint) {
-        return b.smallestEdgeDistance - a.smallestEdgeDistance;
+    // Primary: distance covered (higher is better)
+    if (a.distanceCovered !== b.distanceCovered) {
+        return b.distanceCovered - a.distanceCovered;
     }
-    return b.highestCheckpoint - a.highestCheckpoint;
+    // Secondary: checkpoints (higher is better)
+    if (a.highestCheckpoint !== b.highestCheckpoint) {
+        return b.highestCheckpoint - a.highestCheckpoint;
+    }
+    // Tertiary: edge distance (higher is better - stayed away from walls)
+    return b.smallestEdgeDistance - a.smallestEdgeDistance;
 }
