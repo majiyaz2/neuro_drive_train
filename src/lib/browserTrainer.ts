@@ -27,6 +27,7 @@ export class BrowserTrainer {
     private storage: BrowserStorage;
     networks: Network[];
     private _simulationRound: number = 1;
+    private addLog?: (log: string) => void;
 
     get simulationRound(): number {
         return this._simulationRound;
@@ -52,7 +53,7 @@ export class BrowserTrainer {
      * Creates new networks from evolved offspring for next generation.
      */
     evolveAndSave(): void {
-        console.log(`=== Evolution after Round ${this._simulationRound} ===`);
+        this.addLog?.(`=== Round ${this._simulationRound} Results ===`);
 
         const avgCheckpoint = this.networks.reduce(
             (acc, network) => acc + network.highestCheckpoint, 0)
@@ -62,9 +63,9 @@ export class BrowserTrainer {
             (acc, network) => acc + network.smallestEdgeDistance, 0)
             / this.config.keepCount;
 
-        console.log(`Average checkpoint: ${avgCheckpoint.toFixed(2)}`);
-        console.log(`Cars reached goal: ${carsReachedGoal}/${this.config.populationCount}`);
-        console.log(`Average smallest edge distance: ${avgSmallestEdgeDistance.toFixed(2)}`);
+        this.addLog?.(`Average checkpoint: ${avgCheckpoint.toFixed(2)}`);
+        this.addLog?.(`Cars reached goal: ${carsReachedGoal}/${this.config.populationCount}`);
+        this.addLog?.(`Average smallest edge distance: ${avgSmallestEdgeDistance.toFixed(2)}`);
 
         const serialized: RankableChromosome[] = this.networks.map((n) => n.serialize());
         const offspring = this.evolution.execute(serialized);
@@ -79,7 +80,7 @@ export class BrowserTrainer {
         this._simulationRound++;
     }
 
-    constructor(config: Partial<TrainingConfig> = {}) {
+    constructor(config: Partial<TrainingConfig> = {}, addLog?: (log: string) => void) {
         this.config = { ...DEFAULT_CONFIG, ...config };
         this.networks = Array.from(
             { length: this.config.populationCount },
@@ -91,10 +92,50 @@ export class BrowserTrainer {
         );
         this.storage = new BrowserStorage("chromosomes");
 
+        if (addLog) {
+            this.addLog = addLog;
+        }
+
         // Load best chromosomes from localStorage if available
         const bestChromosomes = this.storage.load();
         for (let i = 0; i < Math.min(bestChromosomes.length, this.networks.length); i++) {
             this.networks[i]!.deserialize(bestChromosomes[i]!);
         }
+    }
+
+    /**
+     * Update configuration at runtime.
+     * Recreates networks and evolution with new population size.
+     */
+    updateConfig(config: Partial<TrainingConfig>): void {
+        const newConfig = { ...this.config, ...config };
+
+        // Only recreate if population size changed
+        if (newConfig.populationCount !== this.config.populationCount) {
+            this.config = newConfig;
+            this.networks = Array.from(
+                { length: this.config.populationCount },
+                () => new Network(this.config.networkDimensions)
+            );
+            this.evolution = new Evolution(
+                this.config.populationCount,
+                this.config.keepCount
+            );
+
+            // Load best chromosomes from localStorage if available
+            const bestChromosomes = this.storage.load();
+            for (let i = 0; i < Math.min(bestChromosomes.length, this.networks.length); i++) {
+                this.networks[i]!.deserialize(bestChromosomes[i]!);
+            }
+        } else {
+            // Just update config values that don't require network recreation
+            this.config = newConfig;
+            this.evolution = new Evolution(
+                this.config.populationCount,
+                this.config.keepCount
+            );
+        }
+
+        console.log('Training config updated:', this.config);
     }
 }

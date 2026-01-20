@@ -19,7 +19,7 @@ export class Evolution {
         );
         const offspring: number[][] = [...keepChromosomes.map((c) => [...c])];
         for (let i = 0; i < reproductionTimes; i++) {
-           for (let j = 0; j < keepChromosomes.length - 1; j+=2) {
+            for (let j = 0; j < keepChromosomes.length - 1; j += 2) {
                 const parent1 = keepChromosomes[j]!;
                 const parent2 = keepChromosomes[j + 1]!;
                 const splitIndex = Math.floor(Math.random() * parent1.length);
@@ -31,7 +31,7 @@ export class Evolution {
                     ...parent2.slice(0, splitIndex),
                     ...parent1.slice(splitIndex)
                 ]);
-           }
+            }
         }
         // Mutation
         for (let i = this.keepCount; i < offspring.length; i++) {
