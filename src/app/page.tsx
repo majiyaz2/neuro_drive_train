@@ -26,6 +26,9 @@ export default function Home() {
     populationSize: 50,
     mutationRate: 0.05,
     hiddenLayers: '2-layer',
+    trackIndex: 2,
+    keepCount: 10,
+    maxIterations: 100,
   });
 
   const [fitnessHistory, setFitnessHistory] = useState<FitnessDataPoint[]>([]);
@@ -59,11 +62,15 @@ export default function Home() {
   }, [addLog]);
 
   const handleApplyParameters = useCallback((newParams: TrainingParameters) => {
+    const trackChanged = newParams.trackIndex !== parameters.trackIndex;
     setParameters(newParams);
-    addLog(`Applying new parameters: population=${newParams.populationSize}, mutation=${(newParams.mutationRate * 100).toFixed(1)}%`);
+    if (trackChanged) {
+      addLog(`Switching to Track ${newParams.trackIndex + 1}`);
+    }
+    addLog(`Applying parameters: population=${newParams.populationSize}, mutation=${(newParams.mutationRate * 100).toFixed(1)}%`);
     setCommand('apply');
     setTimeout(() => setCommand(null), 100);
-  }, [addLog]);
+  }, [addLog, parameters.trackIndex]);
 
   const toggleDarkMode = () => {
     setIsDarkMode(!isDarkMode);
@@ -111,12 +118,12 @@ export default function Home() {
           <div className="flex-1 border-2 border-border bg-secondary-background shadow-shadow overflow-hidden">
             <GameCanvas
               addLog={addLog}
-              trackIndex={2}
+              trackIndex={parameters.trackIndex}
               command={command}
               trainingConfig={{
-                maxGenerationIterations: 100,
+                maxGenerationIterations: parameters.maxIterations,
                 populationCount: parameters.populationSize,
-                keepCount: 10
+                keepCount: parameters.keepCount
               }}
               onLoadingChange={setIsLoading}
               onSimulatingChange={setIsSimulating}
