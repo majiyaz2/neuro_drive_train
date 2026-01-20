@@ -1,20 +1,31 @@
 // src/components/game/GameCanvas.tsx
 'use client';
 
-import React, { useRef, useEffect, useCallback, useState } from 'react';
+import React, { useRef, useEffect, useCallback, useState, useImperativeHandle, forwardRef } from 'react';
 import { Application, Container, Graphics, Text, TextStyle } from 'pixi.js';
 import { Track } from './Track';
 import { Car, SerializableNetwork } from './Car';
 import { HUD } from './HUD';
 import { Network } from '@/lib/network';
 import { BrowserTrainer as Trainer, type TrainingConfig } from '@/lib/browserTrainer';
-import { Button } from '@/components/ui/button';
+
+export type GameCanvasCommand = 'start' | 'pause' | 'reset' | null;
 
 export interface GameCanvasProps {
     trackIndex?: number;
     carImagePaths?: string[];
     trainingConfig?: Partial<TrainingConfig>;
+    command?: GameCanvasCommand;
     onSimulationComplete?: (networks: SerializableNetwork[]) => void;
+    onLoadingChange?: (loading: boolean) => void;
+    onSimulatingChange?: (simulating: boolean) => void;
+    onGenerationComplete?: (generation: number, fitness: number) => void;
+}
+
+export interface GameCanvasRef {
+    start: () => Promise<void>;
+    pause: () => void;
+    reset: () => void;
 }
 
 export interface SimulationConfig {
@@ -54,7 +65,7 @@ function networkToSerializable(network: Network): SerializableNetwork {
     };
 }
 
-export function GameCanvas({
+export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(function GameCanvas({
     trackIndex = 0,
     carImagePaths = [
         '/assets/cars/car0.png',
@@ -64,8 +75,12 @@ export function GameCanvas({
         '/assets/cars/car4.png',
     ],
     trainingConfig,
+    command,
     onSimulationComplete,
-}: GameCanvasProps) {
+    onLoadingChange,
+    onSimulatingChange,
+    onGenerationComplete,
+}, ref) {
     const containerRef = useRef<HTMLDivElement>(null);
     const appRef = useRef<Application | null>(null);
     const trainerRef = useRef<Trainer | null>(null);
@@ -73,6 +88,22 @@ export function GameCanvas({
     const [isLoading, setIsLoading] = useState(true);
     const [simulationRound, setSimulationRound] = useState(1);
     const abortRef = useRef(false);
+
+    // Pause function
+    const pause = useCallback(() => {
+        abortRef.current = true;
+        setIsSimulating(false);
+        onSimulatingChange?.(false);
+    }, [onSimulatingChange]);
+
+    // Reset function
+    const reset = useCallback(() => {
+        abortRef.current = true;
+        setIsSimulating(false);
+        onSimulatingChange?.(false);
+        trainerRef.current = null;
+        setSimulationRound(1);
+    }, [onSimulatingChange]);
 
     // Initialize PixiJS Application
     useEffect(() => {
@@ -83,8 +114,7 @@ export function GameCanvas({
 
         const init = async () => {
             await app.init({
-                width: DEFAULT_CONFIG.width,
-                height: DEFAULT_CONFIG.height,
+                resizeTo: containerRef.current as HTMLElement,
                 backgroundColor: DEFAULT_CONFIG.backgroundColor,
                 antialias: true,
             });
@@ -98,13 +128,14 @@ export function GameCanvas({
             containerRef.current?.appendChild(app.canvas);
             appRef.current = app;
             setIsLoading(false);
+            onLoadingChange?.(false);
         };
 
         init();
 
         return () => {
             mounted = false;
-            if (appRef.current && appRef.current.stage) {
+            if (appRef.current) {
                 appRef.current.destroy(true);
             }
             appRef.current = null;
@@ -130,6 +161,18 @@ export function GameCanvas({
         const gameContainer = new Container();
         gameContainer.sortableChildren = true;
         app.stage.addChild(gameContainer);
+
+        // Stretch simulation to fill the canvas
+        const fillSimulation = () => {
+            const scaleX = app.screen.width / DEFAULT_CONFIG.width;
+            const scaleY = app.screen.height / DEFAULT_CONFIG.height;
+            gameContainer.scale.set(scaleX, scaleY);
+            gameContainer.x = 0;
+            gameContainer.y = 0;
+        };
+
+        fillSimulation();
+        app.renderer.on('resize', fillSimulation);
 
         // Load track
         const track = new Track();
@@ -265,6 +308,12 @@ export function GameCanvas({
                     // Run evolution and create next generation
                     trainerRef.current.evolveAndSave();
                     setSimulationRound(trainerRef.current.simulationRound);
+
+                    // Report generation completion with best fitness
+                    const bestCheckpoint = Math.max(...cars.map(c => c.lastCheckpointPassed));
+                    const totalCheckpoints = track.checkpoints.length;
+                    const bestFitness = (bestCheckpoint / totalCheckpoints) * 100;
+                    onGenerationComplete?.(trainerRef.current.simulationRound, bestFitness);
                 }
 
                 // Callback with updated networks
@@ -280,6 +329,7 @@ export function GameCanvas({
                     }, 100);
                 } else {
                     setIsSimulating(false);
+                    onSimulatingChange?.(false);
                     console.log('Training complete or aborted.');
                 }
             }
@@ -291,6 +341,7 @@ export function GameCanvas({
     // Start training with real networks from Trainer
     const startTraining = useCallback(async () => {
         setIsSimulating(true);
+        onSimulatingChange?.(true);
         abortRef.current = false;
 
         // Create or reuse trainer (loads chromosomes from storage)
@@ -301,7 +352,14 @@ export function GameCanvas({
 
         // Run next generation
         await runNextGeneration();
-    }, [runNextGeneration, trainingConfig]);
+    }, [runNextGeneration, trainingConfig, onSimulatingChange]);
+
+    // Expose control methods via ref
+    useImperativeHandle(ref, () => ({
+        start: startTraining,
+        pause,
+        reset,
+    }), [startTraining, pause, reset]);
 
     // Keyboard handler for ESC to abort
     useEffect(() => {
@@ -316,56 +374,26 @@ export function GameCanvas({
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [isSimulating]);
 
+    // Handle external commands from parent component
+    useEffect(() => {
+        if (!command) return;
+
+        switch (command) {
+            case 'start':
+                if (!isSimulating && !isLoading) {
+                    startTraining();
+                }
+                break;
+            case 'pause':
+                pause();
+                break;
+            case 'reset':
+                reset();
+                break;
+        }
+    }, [command, isSimulating, isLoading, startTraining, pause, reset]);
+
     return (
-        <div className="game-container">
-            <div ref={containerRef} className="canvas-wrapper" />
-            <div className="controls">
-                <Button
-                    onClick={startTraining}
-                    disabled={isSimulating || isLoading}
-                    className="train-button"
-                >
-                    {isLoading ? 'Loading...' : isSimulating ? 'Simulating... (ESC to abort)' : 'Start Training'}
-                </Button>
-            </div>
-            <style jsx>{`
-        .game-container {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 16px;
-          padding: 20px;
-        }
-        .canvas-wrapper {
-          border: 2px solid #333;
-          border-radius: 8px;
-          overflow: hidden;
-          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-        }
-        .controls {
-          display: flex;
-          gap: 12px;
-        }
-        .train-button {
-          padding: 12px 24px;
-          font-size: 16px;
-          font-weight: 600;
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          color: white;
-          border: none;
-          border-radius: 8px;
-          cursor: pointer;
-          transition: all 0.3s ease;
-        }
-        .train-button:hover:not(:disabled) {
-          transform: translateY(-2px);
-          box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-        }
-        .train-button:disabled {
-          opacity: 0.6;
-          cursor: not-allowed;
-        }
-      `}</style>
-        </div>
+        <div ref={containerRef} className="h-full w-full overflow-hidden" />
     );
-}
+});
