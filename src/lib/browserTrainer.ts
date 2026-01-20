@@ -32,6 +32,17 @@ export class BrowserTrainer {
         return this._simulationRound;
     }
 
+    get maxGenerationIterations(): number {
+        return this.config.maxGenerationIterations;
+    }
+
+    /**
+     * Check if training can continue (i.e., we haven't hit the max iterations).
+     */
+    canContinue(): boolean {
+        return this._simulationRound < this.config.maxGenerationIterations;
+    }
+
     incrementRound(): void {
         this._simulationRound++;
     }
