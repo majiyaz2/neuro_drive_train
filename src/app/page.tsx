@@ -58,6 +58,13 @@ export default function Home() {
     setTimeout(() => setCommand(null), 100);
   }, [addLog]);
 
+  const handleApplyParameters = useCallback((newParams: TrainingParameters) => {
+    setParameters(newParams);
+    addLog(`Applying new parameters: population=${newParams.populationSize}, mutation=${(newParams.mutationRate * 100).toFixed(1)}%`);
+    setCommand('apply');
+    setTimeout(() => setCommand(null), 100);
+  }, [addLog]);
+
   const toggleDarkMode = () => {
     setIsDarkMode(!isDarkMode);
     document.documentElement.classList.toggle('dark');
@@ -103,6 +110,7 @@ export default function Home() {
 
           <div className="flex-1 border-2 border-border bg-secondary-background shadow-shadow overflow-hidden">
             <GameCanvas
+              addLog={addLog}
               trackIndex={2}
               command={command}
               trainingConfig={{
@@ -114,7 +122,7 @@ export default function Home() {
               onSimulatingChange={setIsSimulating}
               onGenerationComplete={(gen, fitness) => {
                 setFitnessHistory((prev) => [...prev, { generation: gen, fitness }]);
-                addLog(`[GEN ${gen}] New best fitness: ${fitness.toFixed(1)}%`);
+                addLog(`Fitness score: ${fitness.toFixed(1)}%`);
               }}
             />
           </div>
@@ -123,7 +131,7 @@ export default function Home() {
         {/* Parameters Area - Middle Column */}
         <SidePanel
           parameters={parameters}
-          onParametersChange={setParameters}
+          onParametersChange={handleApplyParameters}
           isSimulating={isSimulating}
         />
 

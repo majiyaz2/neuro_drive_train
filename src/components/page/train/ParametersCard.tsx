@@ -1,7 +1,9 @@
 'use client';
 
+import { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Slider } from '@/components/ui/slider';
+import { Button } from '@/components/ui/button';
 import {
     Select,
     SelectContent,
@@ -9,6 +11,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { Check } from 'lucide-react';
 
 export interface TrainingParameters {
     populationSize: number;
@@ -27,6 +30,27 @@ export function ParametersCard({
     onParametersChange,
     disabled = false,
 }: ParametersCardProps) {
+    // Local state for staged changes
+    const [localParams, setLocalParams] = useState<TrainingParameters>(parameters);
+
+    // Check if there are pending changes
+    const hasChanges = useMemo(() => {
+        return (
+            localParams.populationSize !== parameters.populationSize ||
+            localParams.mutationRate !== parameters.mutationRate ||
+            localParams.hiddenLayers !== parameters.hiddenLayers
+        );
+    }, [localParams, parameters]);
+
+    // Sync local state when parent parameters change (e.g., from reset)
+    useEffect(() => {
+        setLocalParams(parameters);
+    }, [parameters]);
+
+    const handleApply = () => {
+        onParametersChange(localParams);
+    };
+
     return (
         <Card>
             <CardHeader className="pb-2">
@@ -40,20 +64,20 @@ export function ParametersCard({
                     <div className="flex justify-between text-sm">
                         <span>Population Size</span>
                         <span className="font-mono bg-main px-2 border-2 border-border">
-                            {parameters.populationSize}
+                            {localParams.populationSize}
                         </span>
                     </div>
                     <Slider
-                        value={[parameters.populationSize]}
+                        value={[localParams.populationSize]}
                         min={10}
                         max={200}
                         step={10}
                         disabled={disabled}
                         onValueChange={([value]) =>
-                            onParametersChange({
-                                ...parameters,
+                            setLocalParams((prev) => ({
+                                ...prev,
                                 populationSize: value,
-                            })
+                            }))
                         }
                     />
                 </div>
@@ -63,20 +87,20 @@ export function ParametersCard({
                     <div className="flex justify-between text-sm">
                         <span>Mutation Rate</span>
                         <span className="font-mono bg-main px-2 border-2 border-border">
-                            {(parameters.mutationRate * 100).toFixed(1)}%
+                            {(localParams.mutationRate * 100).toFixed(1)}%
                         </span>
                     </div>
                     <Slider
-                        value={[parameters.mutationRate * 100]}
+                        value={[localParams.mutationRate * 100]}
                         min={1}
                         max={50}
                         step={0.5}
                         disabled={disabled}
                         onValueChange={([value]) =>
-                            onParametersChange({
-                                ...parameters,
+                            setLocalParams((prev) => ({
+                                ...prev,
                                 mutationRate: value / 100,
-                            })
+                            }))
                         }
                     />
                 </div>
@@ -85,13 +109,13 @@ export function ParametersCard({
                 <div className="space-y-2">
                     <span className="text-sm">Hidden Layers</span>
                     <Select
-                        value={parameters.hiddenLayers}
+                        value={localParams.hiddenLayers}
                         disabled={disabled}
                         onValueChange={(value) =>
-                            onParametersChange({
-                                ...parameters,
+                            setLocalParams((prev) => ({
+                                ...prev,
                                 hiddenLayers: value,
-                            })
+                            }))
                         }
                     >
                         <SelectTrigger>
@@ -104,6 +128,22 @@ export function ParametersCard({
                         </SelectContent>
                     </Select>
                 </div>
+
+                {/* Apply Button */}
+                <Button
+                    variant="default"
+                    className="w-full"
+                    disabled={disabled || !hasChanges}
+                    onClick={handleApply}
+                >
+                    <Check className="size-4 mr-2" />
+                    Apply Changes
+                </Button>
+                {hasChanges && !disabled && (
+                    <p className="text-xs text-center text-muted-foreground">
+                        You have unsaved changes
+                    </p>
+                )}
             </CardContent>
         </Card>
     );

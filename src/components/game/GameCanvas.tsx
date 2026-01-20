@@ -9,7 +9,7 @@ import { HUD } from './HUD';
 import { Network } from '@/lib/network';
 import { BrowserTrainer as Trainer, type TrainingConfig } from '@/lib/browserTrainer';
 
-export type GameCanvasCommand = 'start' | 'pause' | 'reset' | null;
+export type GameCanvasCommand = 'start' | 'pause' | 'reset' | 'apply' | null;
 
 export interface GameCanvasProps {
     trackIndex?: number;
@@ -20,6 +20,7 @@ export interface GameCanvasProps {
     onLoadingChange?: (loading: boolean) => void;
     onSimulatingChange?: (simulating: boolean) => void;
     onGenerationComplete?: (generation: number, fitness: number) => void;
+    addLog?: (log: string) => void;
 }
 
 export interface GameCanvasRef {
@@ -80,6 +81,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(function Ga
     onLoadingChange,
     onSimulatingChange,
     onGenerationComplete,
+    addLog,
 }, ref) {
     const containerRef = useRef<HTMLDivElement>(null);
     const appRef = useRef<Application | null>(null);
@@ -104,6 +106,14 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(function Ga
         trainerRef.current = null;
         setSimulationRound(1);
     }, [onSimulatingChange]);
+
+    // Apply config function - updates trainer without full reset
+    const applyConfig = useCallback(() => {
+        if (trainerRef.current && trainingConfig) {
+            trainerRef.current.updateConfig(trainingConfig);
+            console.log('Applied new training config:', trainingConfig);
+        }
+    }, [trainingConfig]);
 
     // Initialize PixiJS Application
     useEffect(() => {
@@ -346,7 +356,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(function Ga
 
         // Create or reuse trainer (loads chromosomes from storage)
         if (!trainerRef.current) {
-            trainerRef.current = new Trainer(trainingConfig);
+            trainerRef.current = new Trainer(trainingConfig, addLog);
             setSimulationRound(trainerRef.current.simulationRound);
         }
 
@@ -390,8 +400,11 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(function Ga
             case 'reset':
                 reset();
                 break;
+            case 'apply':
+                applyConfig();
+                break;
         }
-    }, [command, isSimulating, isLoading, startTraining, pause, reset]);
+    }, [command, isSimulating, isLoading, startTraining, pause, reset, applyConfig]);
 
     return (
         <div ref={containerRef} className="h-full w-full overflow-hidden" />
