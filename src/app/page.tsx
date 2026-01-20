@@ -21,6 +21,7 @@ export default function Home() {
   const [isSimulating, setIsSimulating] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [command, setCommand] = useState<GameCanvasCommand>(null);
+  const [simulationSpeed, setSimulationSpeed] = useState(1);
 
   const [parameters, setParameters] = useState<TrainingParameters>({
     populationSize: 50,
@@ -58,6 +59,22 @@ export default function Home() {
     setFitnessHistory([]);
     setCommand('reset');
     setTimeout(() => setCommand(null), 100);
+  }, [addLog]);
+
+  const handleSlowDown = useCallback(() => {
+    setSimulationSpeed((prev) => {
+      const newSpeed = Math.max(0.25, prev / 2);
+      addLog(`Simulation speed: ${newSpeed}x`);
+      return newSpeed;
+    });
+  }, [addLog]);
+
+  const handleSpeedUp = useCallback(() => {
+    setSimulationSpeed((prev) => {
+      const newSpeed = Math.min(4, prev * 2);
+      addLog(`Simulation speed: ${newSpeed}x`);
+      return newSpeed;
+    });
   }, [addLog]);
 
   const handleApplyParameters = useCallback((newParams: TrainingParameters) => {
@@ -109,9 +126,12 @@ export default function Home() {
           <ControlCenterCard
             isSimulating={isSimulating}
             isLoading={isLoading}
+            currentSpeed={simulationSpeed}
             onStart={handleStart}
             onPause={handlePause}
             onReset={handleReset}
+            onSlowDown={handleSlowDown}
+            onSpeedUp={handleSpeedUp}
           />
 
           <div className="flex-1 border-2 border-border bg-secondary-background shadow-shadow overflow-hidden">
@@ -119,6 +139,7 @@ export default function Home() {
               addLog={addLog}
               trackIndex={parameters.trackIndex}
               command={command}
+              simulationSpeed={simulationSpeed}
               trainingConfig={{
                 maxGenerationIterations: parameters.maxIterations,
                 populationCount: parameters.populationSize,

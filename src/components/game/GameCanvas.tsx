@@ -16,6 +16,7 @@ export interface GameCanvasProps {
     carImagePaths?: string[];
     trainingConfig?: Partial<TrainingConfig>;
     command?: GameCanvasCommand;
+    simulationSpeed?: number;
     onSimulationComplete?: (networks: SerializableNetwork[]) => void;
     onLoadingChange?: (loading: boolean) => void;
     onSimulatingChange?: (simulating: boolean) => void;
@@ -78,6 +79,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(function Ga
     ],
     trainingConfig,
     command,
+    simulationSpeed = 1,
     onSimulationComplete,
     onLoadingChange,
     onSimulatingChange,
@@ -90,6 +92,12 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(function Ga
     const [isSimulating, setIsSimulating] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [simulationRound, setSimulationRound] = useState(1);
+    const speedRef = useRef(simulationSpeed);
+
+    // Keep speedRef updated when simulationSpeed prop changes
+    useEffect(() => {
+        speedRef.current = simulationSpeed;
+    }, [simulationSpeed]);
     const abortRef = useRef(false);
 
     // Pause function
@@ -249,7 +257,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(function Ga
                 return;
             }
 
-            const deltaTime = app.ticker.deltaTime / 60; // Normalize to seconds
+            const deltaTime = (app.ticker.deltaTime / 60) * speedRef.current; // Normalize to seconds and apply speed multiplier
 
             for (const car of cars) {
                 if (!car.isRunning) continue;
