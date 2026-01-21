@@ -6,7 +6,7 @@ import { Application, Container, Graphics, Text, TextStyle } from 'pixi.js';
 import { Track } from './Track';
 import { Car, SerializableNetwork } from './Car';
 import { HUD } from './HUD';
-import { Network } from '@/lib/network';
+import { Network, calculateProgressiveCheckpointReward } from '@/lib/network';
 import { BrowserTrainer as Trainer, type TrainingConfig } from '@/lib/browserTrainer';
 
 export type GameCanvasCommand = 'start' | 'pause' | 'reset' | 'apply' | null;
@@ -55,6 +55,8 @@ function networkToSerializable(network: Network): SerializableNetwork {
         smallestEdgeDistance: network.smallestEdgeDistance,
         highestCheckpoint: network.highestCheckpoint,
         distanceCovered: network.distanceCovered,
+        survivalTime: network.survivalTime,
+        wallProximityPenalty: network.wallProximityPenalty,
         layers: network.layers.map(layer => ({
             outputs: [...layer.outputs],
             weights: layer.weights.map(w => [...w]),
@@ -322,17 +324,30 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(function Ga
                             trainerNetwork.highestCheckpoint = cars[i].network.highestCheckpoint;
                             trainerNetwork.smallestEdgeDistance = cars[i].network.smallestEdgeDistance;
                             trainerNetwork.distanceCovered = cars[i].distanceCovered;
+                            trainerNetwork.survivalTime = cars[i].survivalTime;
+                            trainerNetwork.wallProximityPenalty = cars[i].wallProximityPenalty;
                             trainerNetwork.hasReachedGoal = cars[i].network.hasReachedGoal;
                         }
                     }
+
+                    // Calculate best fitness BEFORE evolution (evolution creates new networks with reset values)
+                    const bestFitness = Math.max(...cars.map(car => {
+                        // Use progressive checkpoint rewards (later checkpoints worth exponentially more)
+                        const checkpointReward = calculateProgressiveCheckpointReward(car.lastCheckpointPassed);
+                        const fitness =
+                            (car.distanceCovered * 1.0) +
+                            checkpointReward +
+                            (car.survivalTime * 5) -
+                            (car.wallProximityPenalty * 10);
+                        return fitness;
+                    }));
 
                     // Run evolution and create next generation
                     trainerRef.current.evolveAndSave();
                     setSimulationRound(trainerRef.current.simulationRound);
 
-                    // Report generation completion with best fitness (distance covered)
-                    const bestDistance = Math.max(...cars.map(c => c.distanceCovered));
-                    onGenerationComplete?.(trainerRef.current.simulationRound, bestDistance);
+                    // Report generation completion with best fitness score
+                    onGenerationComplete?.(trainerRef.current.simulationRound, bestFitness);
                 }
 
                 // Callback with updated networks

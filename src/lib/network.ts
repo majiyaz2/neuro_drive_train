@@ -26,6 +26,8 @@ export interface RankableChromosome {
     smallestEdgeDistance: number;
     highestCheckpoint: number;
     distanceCovered: number;
+    survivalTime: number;
+    wallProximityPenalty: number;
 }
 
 export class Network {
@@ -34,6 +36,8 @@ export class Network {
     smallestEdgeDistance: number = 0;
     highestCheckpoint: number = 0;
     distanceCovered: number = 0;
+    survivalTime: number = 0;
+    wallProximityPenalty: number = 0;
     layers: Layer[] = [];
     inputs: number[] = [];
 
@@ -67,7 +71,9 @@ export class Network {
             chromosome,
             smallestEdgeDistance: this.smallestEdgeDistance,
             highestCheckpoint: this.highestCheckpoint,
-            distanceCovered: this.distanceCovered
+            distanceCovered: this.distanceCovered,
+            survivalTime: this.survivalTime,
+            wallProximityPenalty: this.wallProximityPenalty
         }
     }
 
@@ -91,15 +97,50 @@ export class Network {
     }
 }
 
+/**
+ * Calculate progressive checkpoint reward.
+ * Later checkpoints are worth exponentially more to encourage passing difficult sections.
+ * Checkpoint 1: 100, Checkpoint 5: 500, Checkpoint 10: 5000+
+ */
+export function calculateProgressiveCheckpointReward(checkpointsPassed: number): number {
+    let totalReward = 0;
+    for (let i = 1; i <= checkpointsPassed; i++) {
+        // Exponential growth: reward = 100 * 1.5^(checkpoint-1)
+        // Checkpoint 1: 100, 2: 150, 3: 225, 4: 337, 5: 506, 6: 759, 7: 1139, 8: 1708...
+        totalReward += Math.floor(100 * Math.pow(1.5, i - 1));
+    }
+    return totalReward;
+}
+
+/**
+ * Calculate a weighted fitness score for a chromosome.
+ * Higher score = better performance.
+ */
+export function calculateFitness(c: RankableChromosome): number {
+    // Weights for each component
+    const DISTANCE_WEIGHT = 1.0;          // Primary: distance traveled
+    const SURVIVAL_WEIGHT = 5.0;          // Reward for surviving longer
+    const WALL_PENALTY_WEIGHT = -10.0;    // Penalty for driving close to walls
+    const AVG_SPEED_WEIGHT = 2.0;         // Reward for efficient driving
+
+    // Calculate average speed (distance / time), avoid division by zero
+    const avgSpeed = c.survivalTime > 0 ? c.distanceCovered / c.survivalTime : 0;
+
+    // Use progressive checkpoint rewards (later checkpoints worth more)
+    const checkpointReward = calculateProgressiveCheckpointReward(c.highestCheckpoint);
+
+    // Calculate weighted fitness
+    const fitness =
+        (c.distanceCovered * DISTANCE_WEIGHT) +
+        checkpointReward +
+        (c.survivalTime * SURVIVAL_WEIGHT) +
+        (c.wallProximityPenalty * WALL_PENALTY_WEIGHT) +
+        (avgSpeed * AVG_SPEED_WEIGHT);
+
+    return fitness;
+}
+
 export function compareChromosomes(a: RankableChromosome, b: RankableChromosome): number {
-    // Primary: distance covered (higher is better)
-    if (a.distanceCovered !== b.distanceCovered) {
-        return b.distanceCovered - a.distanceCovered;
-    }
-    // Secondary: checkpoints (higher is better)
-    if (a.highestCheckpoint !== b.highestCheckpoint) {
-        return b.highestCheckpoint - a.highestCheckpoint;
-    }
-    // Tertiary: edge distance (higher is better - stayed away from walls)
-    return b.smallestEdgeDistance - a.smallestEdgeDistance;
+    // Compare by weighted fitness score (higher is better)
+    return calculateFitness(b) - calculateFitness(a);
 }

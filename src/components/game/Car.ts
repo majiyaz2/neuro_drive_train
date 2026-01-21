@@ -30,6 +30,8 @@ export interface SerializableNetwork {
     smallestEdgeDistance: number;
     highestCheckpoint: number;
     distanceCovered: number;
+    survivalTime: number;
+    wallProximityPenalty: number;
     layers: {
         outputs: number[];
         weights: number[][];
@@ -52,6 +54,8 @@ export class Car extends Container {
     lastCheckpointPassed: number = 0;
     smallestEdgeDistance: number = 100;
     distanceCovered: number = 0;
+    survivalTime: number = 0;
+    wallProximityPenalty: number = 0;
 
     constructor(
         network: SerializableNetwork,
@@ -130,7 +134,7 @@ export class Car extends Container {
 
             // Handle braking - if brake output is high, decrease speed faster
             if (brake > 0.5) {
-                this.speed -= this.config.deceleration * 3; // Brake at 3x deceleration
+                this.speed -= this.config.deceleration * 6; // Brake at 3x deceleration
             }
 
             // Handle acceleration
@@ -181,9 +185,17 @@ export class Car extends Container {
         this.position.x += dx;
         this.position.y += dy;
 
-        // Accumulate distance covered
+        // Accumulate distance covered and survival time
         if (this.isRunning) {
             this.distanceCovered += Math.abs(this.speed * renderSpeed);
+            this.survivalTime += deltaTime;
+
+            // Calculate wall proximity penalty based on radar readings
+            // Closer to walls = higher penalty (inverse of radar length)
+            const avgRadarLength = this.radars.reduce((sum, r) => sum + r.length, 0) / this.radars.length;
+            const maxRadarLength = this.radars[0]?.maxLengthPixels ?? 100;
+            const proximityFactor = 1 - (avgRadarLength / maxRadarLength); // 0 = far from walls, 1 = very close
+            this.wallProximityPenalty += proximityFactor * deltaTime;
         }
     }
 
