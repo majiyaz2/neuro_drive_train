@@ -202,11 +202,11 @@ export class Car extends Container {
     private probe(radar: Radar): number {
         let probeLength = 0;
 
-        // Use the front of the car (radar location) as the probe starting point
-        // We calculate this based on the car's orientation and the radar's offset
+        // Start probing from the car's center position (no offset)
+        // This allows radars to protrude further from the vehicle
         const radians = this.degreesToRadians(this.carRotation);
-        const startX = this.position.x + 40 * Math.cos(radians);
-        const startY = this.position.y + 40 * Math.sin(radians);
+        const startX = this.position.x;
+        const startY = this.position.y;
 
         let x2 = startX;
         let y2 = startY;
@@ -226,8 +226,13 @@ export class Car extends Container {
         const lx = probeLength * Math.cos(localRadians);
         const ly = probeLength * Math.sin(localRadians);
 
-        // Draw from 0,0 (radar container center) to the calculated local endpoint
-        radar.updateBeam(0, 0, lx, ly, probeLength);
+        // Offset the beam start by -40 to compensate for radar's position on the car
+        // Since probe starts from car center but radar is at x=40, we draw from -40
+        // This ensures the visual beam length matches the actual probe distance
+        const radarOffset = 40;
+        const startOffsetX = -radarOffset;
+        const endOffsetX = lx - radarOffset;
+        radar.updateBeam(startOffsetX, 0, endOffsetX, ly, probeLength);
 
         if (probeLength < this.smallestEdgeDistance) {
             this.smallestEdgeDistance = probeLength;
