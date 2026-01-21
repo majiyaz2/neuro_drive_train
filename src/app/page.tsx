@@ -29,6 +29,7 @@ export default function Home() {
     trackIndex: 2,
     keepCount: 10,
     maxIterations: 100,
+    hypermutationEnabled: true,
   });
 
   const [fitnessHistory, setFitnessHistory] = useState<FitnessDataPoint[]>([]);
@@ -144,13 +145,17 @@ export default function Home() {
                 maxGenerationIterations: parameters.maxIterations,
                 populationCount: parameters.populationSize,
                 keepCount: parameters.keepCount,
-                mutationRate: parameters.mutationRate
+                mutationRate: parameters.mutationRate,
+                hypermutationEnabled: parameters.hypermutationEnabled
               }}
               onLoadingChange={setIsLoading}
               onSimulatingChange={setIsSimulating}
               onGenerationComplete={(gen, fitness) => {
                 setFitnessHistory((prev) => [...prev, { generation: gen, fitness }]);
                 addLog(`Best fitness: ${fitness.toFixed(0)}`);
+              }}
+              onHypermutationChange={(enabled) => {
+                setParameters((prev) => ({ ...prev, hypermutationEnabled: enabled }));
               }}
             />
           </div>

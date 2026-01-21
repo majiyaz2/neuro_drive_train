@@ -13,6 +13,7 @@ export interface TrainingConfig {
     keepCount: number;
     maxGenerationIterations: number;
     mutationRate: number;
+    hypermutationEnabled: boolean;
 }
 
 const DEFAULT_CONFIG: TrainingConfig = {
@@ -20,7 +21,8 @@ const DEFAULT_CONFIG: TrainingConfig = {
     populationCount: 10,
     keepCount: 2,
     maxGenerationIterations: 10,
-    mutationRate: 0.05
+    mutationRate: 0.05,
+    hypermutationEnabled: true
 };
 
 export class BrowserTrainer {
@@ -31,8 +33,18 @@ export class BrowserTrainer {
     private _simulationRound: number = 1;
     private addLog?: (log: string) => void;
 
+    // Stagnation tracking
+    private maxCheckpointEver: number = 0;
+    private stagnationCount: number = 0;
+    private readonly STAGNATION_THRESHOLD = 5; // Generations before hypermutation
+
     get simulationRound(): number {
         return this._simulationRound;
+    }
+
+    get isStagnated(): boolean {
+        // Only trigger hypermutation if enabled in config
+        return this.config.hypermutationEnabled && this.stagnationCount >= this.STAGNATION_THRESHOLD;
     }
 
     get maxGenerationIterations(): number {
@@ -65,12 +77,38 @@ export class BrowserTrainer {
             (acc, network) => acc + network.smallestEdgeDistance, 0)
             / this.config.keepCount;
 
-        this.addLog?.(`Average checkpoint: ${avgCheckpoint.toFixed(2)}`);
+        // Track best checkpoint this generation
+        const bestCheckpointThisGen = Math.max(...this.networks.map(n => n.highestCheckpoint));
+
+        // Stagnation detection
+        const wasStagnated = this.isStagnated; // Check if we WERE in hypermutation mode
+        
+        if (bestCheckpointThisGen > this.maxCheckpointEver) {
+            // New record! Reset stagnation
+            if (wasStagnated) {
+                this.addLog?.(`Hypermutation OFF - progress made!`);
+            }
+            this.addLog?.(`NEW RECORD! Max Checkpoint: ${bestCheckpointThisGen}`);
+            this.maxCheckpointEver = bestCheckpointThisGen;
+            this.stagnationCount = 0;
+        } else {
+            // No improvement
+            this.stagnationCount++;
+            if (this.stagnationCount === this.STAGNATION_THRESHOLD && this.config.hypermutationEnabled) {
+                this.addLog?.(`PLATEAU DETECTED! Entering Hypermutation mode...`);
+            } else if (this.stagnationCount > this.STAGNATION_THRESHOLD && this.config.hypermutationEnabled) {
+                this.addLog?.(`Hypermutation active (stuck for ${this.stagnationCount} gens)`);
+            }
+        }
+
+        this.addLog?.(`Average checkpoint: ${avgCheckpoint.toFixed(2)} `);
         this.addLog?.(`Cars reached goal: ${carsReachedGoal}/${this.config.populationCount}`);
         this.addLog?.(`Average smallest edge distance: ${avgSmallestEdgeDistance.toFixed(2)}`);
 
         const serialized: RankableChromosome[] = this.networks.map((n) => n.serialize());
-        const offspring = this.evolution.execute(serialized);
+
+        // Pass stagnation status to evolution
+        const offspring = this.evolution.execute(serialized, this.isStagnated);
         this.storage.save(offspring.slice(0, this.config.keepCount));
 
         this.networks = offspring.map((chromosome) => {

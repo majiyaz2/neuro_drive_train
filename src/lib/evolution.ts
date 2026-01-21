@@ -50,7 +50,7 @@ export class Evolution {
         return Math.max(0.1, strength);
     }
 
-    execute(rankableChromosomes: RankableChromosome[]): number[][] {
+    execute(rankableChromosomes: RankableChromosome[], isStagnated: boolean = false): number[][] {
         this.generation++;
 
         const sortedChromosomes = [...rankableChromosomes].sort(compareChromosomes).map(c => c.chromosome);
@@ -58,6 +58,21 @@ export class Evolution {
 
         // Start with the best performers (elitism)
         const offspring: number[][] = [...keepChromosomes.map((c) => [...c])];
+
+        // Calculate how many random immigrants to introduce when stagnated
+        const randomImmigrantCount = isStagnated
+            ? Math.floor((this.populationCount - this.keepCount) * 0.2) // 20% random immigrants
+            : 0;
+
+        // Add random immigrants (completely new random chromosomes)
+        const chromosomeLength = keepChromosomes[0]?.length ?? 0;
+        for (let i = 0; i < randomImmigrantCount; i++) {
+            const randomChromosome = Array.from(
+                { length: chromosomeLength },
+                () => Math.random() * 2 - 1
+            );
+            offspring.push(randomChromosome);
+        }
 
         // Fill remaining population with crossover offspring
         while (offspring.length < this.populationCount) {
@@ -82,9 +97,16 @@ export class Evolution {
         }
 
         // Adaptive mutation parameters
-        const mutationRate = this.getAdaptiveMutationRate();
-        const mutationStrength = this.getAdaptiveMutationStrength();
-        const replacementChance = 0.15; // 15% chance to fully replace instead of perturb
+        let mutationRate = this.getAdaptiveMutationRate();
+        let mutationStrength = this.getAdaptiveMutationStrength();
+
+        // HYPERMUTATION: When stagnated, drastically increase mutation
+        if (isStagnated) {
+            mutationRate = Math.min(0.8, mutationRate * 3); // 3x mutation rate, max 80%
+            mutationStrength = Math.min(0.8, mutationStrength * 2); // 2x strength
+        }
+
+        const replacementChance = isStagnated ? 0.3 : 0.15; // More full replacements when stagnated
 
         // Mutation - apply adaptive mutation to non-elite offspring
         for (let i = this.keepCount; i < offspring.length; i++) {

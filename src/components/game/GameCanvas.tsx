@@ -21,6 +21,7 @@ export interface GameCanvasProps {
     onLoadingChange?: (loading: boolean) => void;
     onSimulatingChange?: (simulating: boolean) => void;
     onGenerationComplete?: (generation: number, fitness: number) => void;
+    onHypermutationChange?: (enabled: boolean) => void;
     addLog?: (log: string) => void;
 }
 
@@ -86,6 +87,7 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(function Ga
     onLoadingChange,
     onSimulatingChange,
     onGenerationComplete,
+    onHypermutationChange,
     addLog,
 }, ref) {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -343,7 +345,14 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(function Ga
                     }));
 
                     // Run evolution and create next generation
+                    const wasStagnated = trainerRef.current.isStagnated;
                     trainerRef.current.evolveAndSave();
+                    const isStagnated = trainerRef.current.isStagnated;
+
+                    if (wasStagnated && !isStagnated) {
+                        onHypermutationChange?.(false);
+                    }
+
                     setSimulationRound(trainerRef.current.simulationRound);
 
                     // Report generation completion with best fitness score
