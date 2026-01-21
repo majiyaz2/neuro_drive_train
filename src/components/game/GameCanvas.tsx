@@ -220,10 +220,12 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(function Ga
             gameContainer.addChild(car);
         }
 
-        // Ensure track overlay is on top
+        // Move track overlay to gameContainer so it renders above cars
         const overlay = track.getOverlaySprite();
         if (overlay) {
+            track.removeChild(overlay);
             overlay.zIndex = 150;
+            gameContainer.addChild(overlay);
         }
 
         // Create checkpoints visualization

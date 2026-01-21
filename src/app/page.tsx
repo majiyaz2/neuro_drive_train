@@ -180,7 +180,7 @@ export default function Home() {
       {/* Footer */}
       <footer className="flex items-center justify-between px-6 py-3 border-t-2 border-border text-sm">
         <span className="text-foreground/60">
-          © 2023 Neuro Drive Inc. All rights reserved.
+          © 2026 Neuro Drive Inc. All rights reserved.
         </span>
         <nav className="flex gap-6 text-foreground/80">
           <a href="#" className="hover:underline">Documentation</a>
