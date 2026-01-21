@@ -1,9 +1,7 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Slider } from '@/components/ui/slider';
-import { Button } from '@/components/ui/button';
 import {
     Select,
     SelectContent,
@@ -11,7 +9,8 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { Check, Map } from 'lucide-react';
+import { Map, Zap } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
 
 export interface TrainingParameters {
     populationSize: number;
@@ -19,42 +18,22 @@ export interface TrainingParameters {
     trackIndex: number;
     keepCount: number;
     maxIterations: number;
+    hypermutationEnabled: boolean;
 }
 
 interface ParametersCardProps {
     parameters: TrainingParameters;
-    onParametersChange: (params: TrainingParameters) => void;
+    localParams: TrainingParameters;
+    onLocalParamsChange: (params: TrainingParameters) => void;
     disabled?: boolean;
 }
 
 export function ParametersCard({
     parameters,
-    onParametersChange,
+    localParams,
+    onLocalParamsChange,
     disabled = false,
 }: ParametersCardProps) {
-    // Local state for staged changes
-    const [localParams, setLocalParams] = useState<TrainingParameters>(parameters);
-
-    // Check if there are pending changes
-    const hasChanges = useMemo(() => {
-        return (
-            localParams.populationSize !== parameters.populationSize ||
-            localParams.mutationRate !== parameters.mutationRate ||
-            localParams.trackIndex !== parameters.trackIndex ||
-            localParams.keepCount !== parameters.keepCount ||
-            localParams.maxIterations !== parameters.maxIterations
-        );
-    }, [localParams, parameters]);
-
-    // Sync local state when parent parameters change (e.g., from reset)
-    useEffect(() => {
-        setLocalParams(parameters);
-    }, [parameters]);
-
-    const handleApply = () => {
-        onParametersChange(localParams);
-    };
-
     return (
         <Card>
             <CardHeader className="pb-2">
@@ -73,10 +52,10 @@ export function ParametersCard({
                         value={String(localParams.trackIndex)}
                         disabled={disabled}
                         onValueChange={(value) =>
-                            setLocalParams((prev) => ({
-                                ...prev,
+                            onLocalParamsChange({
+                                ...localParams,
                                 trackIndex: parseInt(value, 10),
-                            }))
+                            })
                         }
                     >
                         <SelectTrigger>
@@ -107,10 +86,10 @@ export function ParametersCard({
                         step={10}
                         disabled={disabled}
                         onValueChange={([value]) =>
-                            setLocalParams((prev) => ({
-                                ...prev,
+                            onLocalParamsChange({
+                                ...localParams,
                                 populationSize: value,
-                            }))
+                            })
                         }
                     />
                 </div>
@@ -130,10 +109,10 @@ export function ParametersCard({
                         step={1}
                         disabled={disabled}
                         onValueChange={([value]) =>
-                            setLocalParams((prev) => ({
-                                ...prev,
+                            onLocalParamsChange({
+                                ...localParams,
                                 keepCount: value,
-                            }))
+                            })
                         }
                     />
                     <p className="text-xs text-muted-foreground">
@@ -156,10 +135,10 @@ export function ParametersCard({
                         step={10}
                         disabled={disabled}
                         onValueChange={([value]) =>
-                            setLocalParams((prev) => ({
-                                ...prev,
+                            onLocalParamsChange({
+                                ...localParams,
                                 maxIterations: value,
-                            }))
+                            })
                         }
                     />
                     <p className="text-xs text-muted-foreground">
@@ -182,10 +161,10 @@ export function ParametersCard({
                         step={0.5}
                         disabled={disabled}
                         onValueChange={([value]) =>
-                            setLocalParams((prev) => ({
-                                ...prev,
+                            onLocalParamsChange({
+                                ...localParams,
                                 mutationRate: value / 100,
-                            }))
+                            })
                         }
                     />
                     <p className="text-xs text-muted-foreground">
@@ -193,21 +172,28 @@ export function ParametersCard({
                     </p>
                 </div>
 
-                {/* Apply Button */}
-                <Button
-                    variant="default"
-                    className="w-full"
-                    disabled={disabled || !hasChanges}
-                    onClick={handleApply}
-                >
-                    <Check className="size-4 mr-2" />
-                    Apply Changes
-                </Button>
-                {hasChanges && !disabled && (
-                    <p className="text-xs text-center text-muted-foreground">
-                        You have unsaved changes
-                    </p>
-                )}
+                {/* Hypermutation Toggle */}
+                <div className="flex items-center justify-between py-2 border-t border-border">
+                    <div className="flex items-center gap-2">
+                        <Zap className="size-4" />
+                        <div>
+                            <span className="text-sm">Hypermutation</span>
+                            <p className="text-xs text-muted-foreground">
+                                Auto-boost mutation when stuck
+                            </p>
+                        </div>
+                    </div>
+                    <Switch
+                        checked={localParams.hypermutationEnabled}
+                        disabled={disabled}
+                        onCheckedChange={(checked) =>
+                            onLocalParamsChange({
+                                ...localParams,
+                                hypermutationEnabled: checked,
+                            })
+                        }
+                    />
+                </div>
             </CardContent>
         </Card>
     );
