@@ -2,7 +2,7 @@
 
 import { useMemo, useCallback } from "react";
 import { api } from "@/trpc/react";
-import { Network } from "@/server/lib/network";
+import { Network } from "@/lib/network";
 
 /**
  * Custom hook to load a trained neural network and run inference locally.

@@ -1,10 +1,10 @@
 
 
 import { createTRPCRouter, publicProcedure } from "@/server/api/trpc";
-import { Network } from "@/server/lib/network";
-import { Storage } from "@/server/lib/storage";
-import { Tester } from "@/server/lib/tester";
-import { Trainer } from "@/server/lib/trainer";
+import { Network } from "@/lib/network";
+import { Storage } from "@/lib/storage";
+import { Tester } from "@/lib/tester";
+import { Trainer } from "@/lib/trainer";
 import { PredictInputSChema, NetworkInputSchema } from "@/server/types/neuralNetwork";
 import { z } from "zod";
 
