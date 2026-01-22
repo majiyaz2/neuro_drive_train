@@ -1,7 +1,7 @@
 import { useRaycastClosest } from '@react-three/cannon'
 import { extend, type ThreeElement, useFrame } from '@react-three/fiber'
 import { useCallback, useMemo, useRef, useState, type RefObject } from 'react'
-import { BufferAttribute, BufferGeometry, Line as ThreeLine, Object3D, Vector3 } from 'three'
+import { BufferAttribute, BufferGeometry, Line as ThreeLine, LineBasicMaterial, Object3D, Vector3 } from 'three'
 
 extend({ ThreeLine })
 
@@ -113,8 +113,10 @@ export function CarRays({ chassisRef, enabled = true, onProbe }: CarRaysProps) {
         }))
     )
 
-    // State for results and hit distances (for visual feedback)
-    const [hitDistances, setHitDistances] = useState<number[]>(Array(sensorPositions.length).fill(rayLength))
+    // Refs for immediate hit data (no state re-renders)
+    const hitDataRef = useRef<{ hasHit: boolean; distance: number }[]>(
+        Array(sensorPositions.length).fill(null).map(() => ({ hasHit: false, distance: rayLength }))
+    )
     const resultsRef = useRef<RayResult[]>(Array(sensorPositions.length).fill(null).map((_, i) => ({
         hasHit: false,
         hitPoint: null,
@@ -123,16 +125,17 @@ export function CarRays({ chassisRef, enabled = true, onProbe }: CarRaysProps) {
         rayIndex: i,
     })))
 
-    // Handle ray result callback
+
+
+    // Handle ray result callback - store directly in refs for immediate access
     const handleRayResult = useCallback((result: RayResult) => {
         resultsRef.current[result.rayIndex] = result
 
-        // Update hit distance for visual feedback
-        setHitDistances(prev => {
-            const newDistances = [...prev]
-            newDistances[result.rayIndex] = result.hitDistance
-            return newDistances
-        })
+        // Store hit data in ref for immediate access in useFrame
+        hitDataRef.current[result.rayIndex] = {
+            hasHit: result.hasHit,
+            distance: result.hitDistance
+        }
 
         // Call onProbe with all results
         if (onProbe) {
@@ -140,16 +143,22 @@ export function CarRays({ chassisRef, enabled = true, onProbe }: CarRaysProps) {
         }
     }, [onProbe])
 
-    // Compute colors based on hit distance
-    const rayColors = useMemo(() => {
-        return hitDistances.map(hitDistance => {
-            const normalizedDist = Math.min(hitDistance / rayLength, 1)
-            // Interpolate from red (close) to green (far)
-            const r = Math.floor(255 * (1 - normalizedDist))
-            const g = Math.floor(255 * normalizedDist)
-            return `rgb(${r}, ${g}, 0)`
-        })
-    }, [hitDistances])
+    // Compute colors directly from refs
+    const getColorForRay = (i: number): string => {
+        const data = hitDataRef.current[i]
+        if (!data) return 'rgb(0, 200, 255)'
+
+        // If no hit, return cyan
+        if (!data.hasHit || data.distance >= rayLength) {
+            return 'rgb(0, 200, 255)' // Cyan for no hit
+        }
+
+        // Interpolate from red (close) to yellow/green (far) for hits
+        const normalizedDist = Math.min(data.distance / rayLength, 1)
+        const r = Math.floor(255 * (1 - normalizedDist))
+        const g = Math.floor(255 * normalizedDist)
+        return `rgb(${r}, ${g}, 0)`
+    }
 
     // Update counter for throttling state updates
     const frameCountRef = useRef(0)
@@ -184,11 +193,22 @@ export function CarRays({ chassisRef, enabled = true, onProbe }: CarRaysProps) {
                 to: rayEnd.toArray() as [number, number, number],
             })
 
-            // Get hit distance for visual line
-            const hitDistance = hitDistances[i] ?? rayLength
-            const visualEnd = start.clone().add(dir.clone().multiplyScalar(hitDistance))
+            // Read directly from ref for immediate feedback
+            const data = hitDataRef.current[i]
+            const hasHit = data?.hasHit ?? false
+            const hitDistance = data?.distance ?? rayLength
 
-            // Update line geometry if available - shows actual hit position
+            // If no hit, show full ray length; otherwise show hit distance
+            const visualLength = hasHit ? hitDistance : rayLength
+            const visualEnd = start.clone().add(dir.clone().multiplyScalar(visualLength))
+
+            // Update line color directly on the material
+            if (line && line.material) {
+                const color = getColorForRay(i)
+                    ; (line.material as LineBasicMaterial).color.setStyle(color)
+            }
+
+            // Update line geometry if available
             if (line) {
                 const positions = line.geometry.attributes.position
                 if (positions) {
@@ -215,7 +235,7 @@ export function CarRays({ chassisRef, enabled = true, onProbe }: CarRaysProps) {
                 <RayLine
                     key={`line-${i}`}
                     lineRef={(el) => { lineRefs.current[i] = el }}
-                    color={rayColors[i] ?? "red"}
+                    color={getColorForRay(i)}
                 />
             ))}
             {rayPositions.map((ray, i) => (
