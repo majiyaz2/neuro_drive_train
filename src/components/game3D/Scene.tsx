@@ -6,6 +6,7 @@ import  { Suspense } from 'react'
 import { useToggledControl } from '@/components/game3D/use-toggled-control'
 import { Plane } from './Plane'
 import { Pillar } from './Pillar'
+import Vehicle from './Vehicle'
 
 export const Scene = () => {
     const ToggledDebug = useToggledControl(Debug, '?')
@@ -34,6 +35,8 @@ export const Scene = () => {
                         <Pillar position={[-5, 2.5, -5]} userData={{ id: 'pillar-1' }} />
                         <Pillar position={[0, 2.5, -5]} userData={{ id: 'pillar-2' }} />
                         <Pillar position={[5, 2.5, -5]} userData={{ id: 'pillar-3' }} />
+                        {/* <TaxiVehicle position={[0, 2, 0]} rotation={[0, -Math.PI / 4, 0]} angularVelocity={[0, 0.5, 0]} /> */}
+                        <Vehicle position={[0, 2, 0]} rotation={[0, -Math.PI / 4, 0]} angularVelocity={[0, 0.5, 0]} />
                     </ToggledDebug>
                 </Physics>
                 <Suspense fallback={null}>
