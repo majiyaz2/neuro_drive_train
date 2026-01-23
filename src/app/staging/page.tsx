@@ -8,6 +8,20 @@ import { Button } from "@/components/ui/button";
 import { Trophy, ChevronRight, Activity, Wallet, Info } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
+import {
+    createPublicClient,
+    createWalletClient,
+    custom,
+    http,
+    parseEther,
+    formatEther,
+    decodeEventLog,
+    type Address,
+    type Hash
+} from "viem";
+import { sepolia } from "viem/chains";
+import { NEXUS_DRIVE_ADDRESS, NEXUS_DRIVE_ABI } from "@/lib/nexusDriveContract";
+import { useEffect, useCallback } from "react";
 
 interface Track {
     index: number;
@@ -19,16 +33,95 @@ interface Track {
 }
 
 const TRACKS: Track[] = [
-    { index: 0, name: "Neon Circuit", fee: "0.01", difficulty: "EASY", rewardMultiplier: "1.0x", description: "A high-speed neon-lit circuit with sharp turns and long straights. Perfect for testing raw speed." },
-    { index: 1, name: "Brutal Desert", fee: "0.02", difficulty: "HARD", rewardMultiplier: "2.5x", description: "Harsh terrain and unpredictable corners. Tests the suspension and stability of your neural patterns." },
-    { index: 2, name: "Cyber Jungle", fee: "0.015", difficulty: "MEDIUM", rewardMultiplier: "1.8x", description: "Dense environment with narrow paths. Requires precise steering and quick reflexes and precise driving." },
-    { index: 3, name: "Acid Raid", fee: "0.01", difficulty: "HARD", rewardMultiplier: "2.2x", description: "Corrosive atmosphere. Focuses on survival time and navigating through treacherous obstacles." },
-    { index: 4, name: "Giga Void", fee: "0.05", difficulty: "BRUTAL", rewardMultiplier: "5.0x", description: "High stakes, high rewards. The ultimate field to prove your agent's peak performance." },
+    { index: 0, name: "Neon Circuit", fee: "0.0001", difficulty: "EASY", rewardMultiplier: "1.0x", description: "A high-speed neon-lit circuit with sharp turns and long straights. Perfect for testing raw speed." },
+    { index: 1, name: "Brutal Desert", fee: "0.0002", difficulty: "HARD", rewardMultiplier: "2.5x", description: "Harsh terrain and unpredictable corners. Tests the suspension and stability of your neural patterns." },
+    { index: 2, name: "Cyber Jungle", fee: "0.00015", difficulty: "MEDIUM", rewardMultiplier: "1.8x", description: "Dense environment with narrow paths. Requires precise steering and quick reflexes and precise driving." },
+    { index: 3, name: "Acid Raid", fee: "0.0001", difficulty: "HARD", rewardMultiplier: "2.2x", description: "Corrosive atmosphere. Focuses on survival time and navigating through treacherous obstacles." },
+    { index: 4, name: "Giga Void", fee: "0.0005", difficulty: "BRUTAL", rewardMultiplier: "5.0x", description: "High stakes, high rewards. The ultimate field to prove your agent's peak performance." },
 ];
 
 export default function StagingPage() {
     const [selectedTrack, setSelectedTrack] = useState<number | null>(null);
     const [isSimulating, setIsSimulating] = useState(false);
+    const [account, setAccount] = useState<Address | null>(null);
+    const [balance, setBalance] = useState<string>("0");
+    const [isPending, setIsPending] = useState(false);
+    const [activeAttemptId, setActiveAttemptId] = useState<bigint | null>(null);
+
+    // Clients
+    const publicClient = createPublicClient({
+        chain: sepolia,
+        transport: http("https://ethereum-sepolia-rpc.publicnode.com"),
+    });
+
+    const fetchBalance = useCallback(async (addr: Address) => {
+        try {
+            const bal = await publicClient.getBalance({ address: addr });
+            setBalance(Number(formatEther(bal)).toFixed(3));
+        } catch (err) {
+            console.error("Failed to fetch balance:", err);
+        }
+    }, [publicClient]);
+
+    const connectWallet = async () => {
+        if (!window.ethereum) return;
+        try {
+            const accounts = await window.ethereum.request({ method: "eth_requestAccounts" }) as Address[];
+            setAccount(accounts[0]);
+            fetchBalance(accounts[0]);
+        } catch (err) {
+            console.error("Connection failed:", err);
+        }
+    };
+
+    const handleAttemptTrack = async () => {
+        if (!account || selectedTrack === null || !window.ethereum) return;
+
+        const track = TRACKS[selectedTrack];
+        const walletClient = createWalletClient({
+            account,
+            chain: sepolia,
+            transport: custom(window.ethereum),
+        });
+
+        try {
+            setIsPending(true);
+            const hash = await walletClient.writeContract({
+                address: NEXUS_DRIVE_ADDRESS,
+                abi: NEXUS_DRIVE_ABI,
+                functionName: "attemptTrack",
+                args: [BigInt(selectedTrack)],
+                value: parseEther(track.fee)
+            });
+
+            const receipt = await publicClient.waitForTransactionReceipt({ hash });
+
+            // Parse logs to find attemptId from TrackAttempted event
+            const logs = receipt.logs.map(log => {
+                try {
+                    const event = decodeEventLog({
+                        abi: NEXUS_DRIVE_ABI,
+                        data: log.data,
+                        topics: log.topics,
+                    });
+                    return event;
+                } catch { return null; }
+            }).filter(Boolean);
+
+            if (logs.length > 0 && logs[0]) {
+                const event = logs[0] as any;
+                if (event.eventName === 'TrackAttempted') {
+                    setActiveAttemptId(event.args.attemptId);
+                }
+            }
+
+            setIsSimulating(true);
+        } catch (err) {
+            console.error("Transaction failed:", err);
+        } finally {
+            setIsPending(false);
+        }
+    };
 
     return (
         <div className="flex h-screen bg-background overflow-hidden font-base">
@@ -38,7 +131,14 @@ export default function StagingPage() {
                 isSimulating ? "p-0" : "p-8 overflow-y-auto"
             )}>
                 {isSimulating && selectedTrack !== null ? (
-                    <Scene onBack={() => setIsSimulating(false)} />
+                    <Scene
+                        onBack={() => {
+                            setIsSimulating(false);
+                            setActiveAttemptId(null);
+                        }}
+                        attemptId={activeAttemptId}
+                        account={account}
+                    />
                 ) : (
                     <>
                         <header className="flex items-center justify-between border-b-4 border-border pb-6">
@@ -54,11 +154,18 @@ export default function StagingPage() {
                             </div>
 
                             <div className="flex gap-4">
-                                <div className="p-3 border-2 border-border bg-card shadow-shadow rounded-base flex items-center gap-3">
+                                <div
+                                    className="p-3 border-2 border-border bg-card shadow-shadow rounded-base flex items-center gap-3 cursor-pointer hover:bg-main hover:text-main-foreground transition-colors"
+                                    onClick={!account ? connectWallet : undefined}
+                                >
                                     <Wallet className="size-5" />
                                     <div className="font-mono leading-none">
-                                        <p className="text-[10px] text-muted-foreground uppercase">Balance</p>
-                                        <p className="text-sm font-bold">1.254 SEP</p>
+                                        <p className="text-[10px] text-muted-foreground uppercase">
+                                            {account ? `${account.slice(0, 6)}...` : "Wallet"}
+                                        </p>
+                                        <p className="text-sm font-bold">
+                                            {account ? `${balance} ETH` : "CONNECT"}
+                                        </p>
                                     </div>
                                 </div>
                             </div>
@@ -91,11 +198,11 @@ export default function StagingPage() {
 
                             <Button
                                 size="lg"
-                                disabled={selectedTrack === null}
-                                onClick={() => setIsSimulating(true)}
+                                disabled={selectedTrack === null || isPending}
+                                onClick={handleAttemptTrack}
                                 className="h-20 px-12 text-2xl font-heading uppercase gap-4"
                             >
-                                {selectedTrack === null ? "Select Circuit" : "Attempt Track"}
+                                {isPending ? "Syncing..." : (selectedTrack === null ? "Select Circuit" : "Attempt Track")}
                                 <ChevronRight className="size-8" />
                             </Button>
                         </div>

@@ -9,8 +9,20 @@ import { useToggledControl } from '@/hooks/use-toggled-control'
 import { Plane } from './Plane'
 import Vehicle from './Vehicle'
 import { Road } from './Road'
+import { createPublicClient, createWalletClient, custom, http, type Address, hexToBytes, bytesToHex } from 'viem'
+import { sepolia } from 'viem/chains'
+import { NEXUS_DRIVE_ADDRESS, NEXUS_DRIVE_ABI } from '@/lib/nexusDriveContract'
+import { IpfsService } from '@/lib/ipfsService'
 
-export const Scene = ({ onBack }: { onBack: () => void }) => {
+export const Scene = ({
+    onBack,
+    attemptId,
+    account
+}: {
+    onBack: () => void,
+    attemptId: bigint | null,
+    account: Address | null
+}) => {
     const ToggledDebug = useToggledControl(Debug, '?')
 
     // Telemetry state
@@ -34,6 +46,53 @@ export const Scene = ({ onBack }: { onBack: () => void }) => {
         setVictoryStats(stats)
         setIsSimulating(false)
     }, [])
+
+    const handleClaim = async () => {
+        if (!account || !attemptId || !victoryStats || !window.ethereum) return;
+
+        const ipfs = new IpfsService(); // Using simulation mode unless key is provided
+        const publicClient = createPublicClient({
+            chain: sepolia,
+            transport: http("https://ethereum-sepolia-rpc.publicnode.com"),
+        });
+
+        const walletClient = createWalletClient({
+            account,
+            chain: sepolia,
+            transport: custom(window.ethereum),
+        });
+
+        try {
+            console.log("Uploading model to IPFS...");
+            // In a real scenario, we'd upload actual weights here
+            const dummyModel = {
+                weights: [0.1, -0.2, 0.5],
+                stats: victoryStats,
+                timestamp: Date.now()
+            };
+            const ipfsHash = await ipfs.uploadModel(dummyModel);
+
+            // Convert IPFS CID (string) to bytes32 for the contract
+            // For now, we'll hash the string to simulate a bytes32 modelHash
+            // Realistic implementation would involve decoding Base58 CID
+            const modelHashBytes = bytesToHex(new TextEncoder().encode(ipfsHash.slice(0, 31)));
+
+            console.log("Claiming victory on-chain...");
+            const hash = await walletClient.writeContract({
+                address: NEXUS_DRIVE_ADDRESS,
+                abi: NEXUS_DRIVE_ABI,
+                functionName: "claimVictory",
+                args: [attemptId, modelHashBytes as `0x${string}`]
+            });
+
+            await publicClient.waitForTransactionReceipt({ hash });
+            console.log("Victory claimed successfully!");
+            setVictoryStats(null);
+            onBack();
+        } catch (err) {
+            console.error("Claim failed:", err);
+        }
+    };
 
     return (
         <div style={{ width: '100%', height: '100%', position: 'relative' }}>
@@ -90,10 +149,7 @@ export const Scene = ({ onBack }: { onBack: () => void }) => {
                     nonce={victoryStats.nonce}
                     difficulty="MEDIUM"
                     reward="0.05"
-                    onClaim={() => {
-                        console.log("Claiming victory...")
-                        setVictoryStats(null)
-                    }}
+                    onClaim={handleClaim}
                     onClose={() => setVictoryStats(null)}
                 />
             )}
