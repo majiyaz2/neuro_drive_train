@@ -1,7 +1,7 @@
 import type { BoxProps, WheelInfoOptions } from '@react-three/cannon'
 import { useBox, useRaycastVehicle } from '@react-three/cannon'
 import { useFrame } from '@react-three/fiber'
-import { useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import type { Group, Mesh } from 'three'
 
 import { CarRays, type RayResult } from './CarRays'
@@ -23,6 +23,8 @@ export type VehicleProps = Required<Pick<BoxProps, 'angularVelocity' | 'position
   width?: number
   enableRays?: boolean
   networkIndex?: number
+  onProgress?: (speed: number, checkpoints: number) => void
+  onGoalReached?: (stats: { modelHash: string; nonce: string }) => void
 }
 
 function Vehicle({
@@ -39,6 +41,8 @@ function Vehicle({
   width = 1.2,
   enableRays = true,
   networkIndex = 0,
+  onProgress,
+  onGoalReached,
 }: VehicleProps) {
   const wheels = [useRef<Group>(null), useRef<Group>(null), useRef<Group>(null), useRef<Group>(null)]
   const chassisGroup = useRef<Group>(null)
@@ -124,8 +128,36 @@ function Vehicle({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   // useEffect(() => vehicleApi.sliding.subscribe((v) => console.log('sliding', v)), [])
 
+  // Tracking state
+  const velocityRef = useRef([0, 0, 0])
+  const lastCheckpointRef = useRef(0)
+
+  // Subscribe to velocity
+  useEffect(() => {
+    return chassisApi.velocity.subscribe((v) => (velocityRef.current = v))
+  }, [chassisApi.velocity])
+
   useFrame(() => {
     const { backward, brake, forward, left, reset, right, autonomous } = controls.current
+
+    // Calculate speed in KM/H (physics units are m/s)
+    const speedMs = Math.sqrt(
+      velocityRef.current[0] ** 2 +
+      velocityRef.current[1] ** 2 +
+      velocityRef.current[2] ** 2
+    )
+    const speedKmh = speedMs * 3.6
+
+    // Notify progress (simplified checkpoint tracking for now)
+    onProgress?.(speedKmh, lastCheckpointRef.current)
+
+    // Handle session completion (mock condition)
+    if (lastCheckpointRef.current >= 10) { // Total 10 checkpoints
+      onGoalReached?.({
+        modelHash: "0xQmZ8yZ...f3D6",
+        nonce: "125849"
+      })
+    }
 
     // Toggle autonomous mode on 'N' key press (edge detection)
     if (autonomous && !lastAutonomousKeyRef.current) {
@@ -155,7 +187,6 @@ function Vehicle({
           vehicleApi.setSteeringValue(outputs[0] ?? 0, 1)
 
           // Apply engine force to BACK wheels (indices 2 and 3)
-          // NOTE: Negative force = forward, positive force = backward
           const engineForce = (outputs[1] ?? 0) * -1500
           vehicleApi.applyEngineForce(engineForce, 2)
           vehicleApi.applyEngineForce(engineForce, 3)
@@ -193,6 +224,7 @@ function Vehicle({
       chassisApi.velocity.set(0, 0, 0)
       chassisApi.angularVelocity.set(...angularVelocity)
       chassisApi.rotation.set(...rotation)
+      lastCheckpointRef.current = 0
     }
   })
 
@@ -208,8 +240,8 @@ function Vehicle({
       </group>
       <Wheel ref={wheels[0]} radius={radius} leftSide meshOffset={[-0.2, 0, 0]} />
       <Wheel ref={wheels[1]} radius={radius} meshOffset={[0.2, 0, 0]} />
-      <Wheel ref={wheels[2]} radius={radius} leftSide meshOffset={[0.2, 0, 0]} />
-      <Wheel ref={wheels[3]} radius={radius} meshOffset={[-0.2, 0, 0]} />
+      <Wheel ref={wheels[2]} radius={radius} leftSide meshOffset={[-0.2, 0, 0]} />
+      <Wheel ref={wheels[3]} radius={radius} meshOffset={[0.2, 0, 0]} />
     </group>
   )
 }

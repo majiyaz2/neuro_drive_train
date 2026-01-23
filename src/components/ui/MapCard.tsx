@@ -11,6 +11,8 @@ interface MapCardProps {
     trackName: string;
     entryFee: string;
     description: string;
+    difficulty: string;
+    rewardMultiplier: string;
     isSelected: boolean;
     onSelect: (index: number) => void;
 }
@@ -22,6 +24,8 @@ export function MapCard({
     trackName,
     entryFee,
     description,
+    difficulty,
+    rewardMultiplier,
     isSelected,
     onSelect,
 }: MapCardProps) {
@@ -52,9 +56,31 @@ export function MapCard({
                 <p className="text-sm mb-4 leading-relaxed">
                     {description}
                 </p>
-                <div className="flex items-center justify-between font-mono text-sm bg-secondary-background p-2 border-2 border-border rounded-base">
-                    <span>ENTRY FEE</span>
-                    <span className="font-bold text-main-foreground bg-main px-2 border-l-2 border-border">{entryFee} ETH</span>
+
+                <div className="space-y-2 mb-4">
+                    <div className="flex items-center justify-between font-mono text-[10px] bg-secondary-background border-2 border-border rounded-base overflow-hidden">
+                        <span className="px-2 py-1 uppercase">Difficulty</span>
+                        <span className={cn(
+                            "px-2 py-1 font-bold border-l-2 border-border min-w-[80px] text-center",
+                            difficulty === "BRUTAL" || difficulty === "HARD" ? "bg-red-500 text-white" : "bg-main"
+                        )}>
+                            {difficulty}
+                        </span>
+                    </div>
+
+                    <div className="flex items-center justify-between font-mono text-[10px] bg-secondary-background border-2 border-border rounded-base overflow-hidden">
+                        <span className="px-2 py-1 uppercase">Reward Multi</span>
+                        <span className="px-2 py-1 font-bold bg-main border-l-2 border-border min-w-[80px] text-center">
+                            {rewardMultiplier}
+                        </span>
+                    </div>
+                </div>
+
+                <div className="flex items-center justify-between font-mono text-sm bg-secondary-background border-2 border-border rounded-base overflow-hidden">
+                    <span className="px-2 py-1 uppercase">Entry Fee</span>
+                    <span className="font-bold text-main-foreground bg-main px-2 py-1 border-l-2 border-border">
+                        {entryFee} ETH
+                    </span>
                 </div>
             </CardContent>
             <CardFooter>
