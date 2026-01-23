@@ -19,15 +19,28 @@ import { Network } from "@/lib/network";
  *  - refetch: Function to reload the network from storage
  *  - networkInfo: Metadata about the loaded network
  */
-export function useNeuralNetwork(networkIndex?: number) {
+export function useNeuralNetwork(networkIndex?: number, customModel?: any) {
     // Fetch the network chromosome from storage (server-side)
     const { data, isLoading, error, refetch } = api.neuralNetwork.loadBestNetwork.useQuery(
         { index: networkIndex },
-        { enabled: true }
+        { enabled: !customModel } // Disable if custom model is provided
     );
 
     // Create and deserialize the network instance on the client
     const network = useMemo(() => {
+        // Use custom model if provided
+        if (customModel) {
+            const chromosome = customModel.chromosome || (Array.isArray(customModel) ? customModel : null);
+            if (!chromosome) return null;
+
+            // Fallback to default dimensions if not present in the model
+            const dimensions = customModel.dimensions || [5, 4, 2];
+
+            const net = new Network(dimensions);
+            net.deserialize(chromosome);
+            return net;
+        }
+
         if (!data?.chromosome || !data?.dimensions) {
             return null;
         }
@@ -35,7 +48,7 @@ export function useNeuralNetwork(networkIndex?: number) {
         const net = new Network(data.dimensions);
         net.deserialize(data.chromosome);
         return net;
-    }, [data]);
+    }, [data, customModel]);
 
     // Prediction function - runs entirely on the client
     const predict = useCallback((rayDistances: number[]): number[] | null => {

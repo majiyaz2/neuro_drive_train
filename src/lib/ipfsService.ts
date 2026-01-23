@@ -15,6 +15,7 @@ export class IpfsService {
      * @dev Upload model JSON to Pinata.
      */
     async uploadModel(modelData: any): Promise<string> {
+        console.log('Uploading model to IPFS...', this.pinataApiKey);
         if (!this.pinataApiKey) {
             console.warn('No Pinata API Key. Simulating upload.');
             return this._simulateUpload(modelData);
@@ -29,7 +30,7 @@ export class IpfsService {
             body: JSON.stringify({
                 pinataContent: modelData,
                 pinataMetadata: {
-                    name: `NexusDrive_Model_${Date.now()}`
+                    name: `NeuroDrive_Model_${Date.now()}`
                 }
             })
         });
@@ -40,12 +41,43 @@ export class IpfsService {
     }
 
     /**
-     * @dev Fetch model from IPFS.
+     * @dev Fetch model from IPFS with fallback gateways.
      */
     async fetchModel(cid: string): Promise<any> {
-        const response = await fetch(`${this.gateway}${cid}`);
-        if (!response.ok) throw new Error('Failed to fetch from IPFS');
-        return await response.json();
+        const primaryGateway = this.gateway.endsWith('/') ? this.gateway : `${this.gateway}/`;
+        const gateways = [
+            primaryGateway,
+            'https://gateway.pinata.cloud/ipfs/',
+            'https://cloudflare-ipfs.com/ipfs/',
+            'https://ipfs.io/ipfs/',
+            'https://dweb.link/ipfs/'
+        ];
+
+        // Remove duplicates and ensure primary is first
+        const uniqueGateways = Array.from(new Set(gateways));
+
+        for (const gw of uniqueGateways) {
+            try {
+                const url = `${gw}${cid}`;
+                console.log(`Attempting to fetch from IPFS: ${url}`);
+
+                // Using a shorter timeout for fallback logic
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout per gateway
+
+                const response = await fetch(url, { signal: controller.signal });
+                clearTimeout(timeoutId);
+
+                if (response.ok) {
+                    return await response.json();
+                }
+                console.warn(`Gateway ${gw} returned status ${response.status}`);
+            } catch (err) {
+                console.warn(`Failed to fetch from gateway ${gw}:`, err);
+            }
+        }
+
+        throw new Error(`Failed to fetch model ${cid} from all available IPFS gateways.`);
     }
 
     private _simulateUpload(data: any): Promise<string> {

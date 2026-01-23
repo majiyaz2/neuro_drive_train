@@ -6,9 +6,13 @@ import { SidePanel, type TrainingParameters, type FitnessDataPoint, type LogEntr
 import { ControlCenterCard } from '@/components/page/train/ControlCenterCard';
 import { FitnessHistoryCard } from '@/components/page/train/FitnessHistoryCard';
 import { ConsoleCard } from '@/components/page/train/ConsoleCard';
-import { Sun, Moon, Cpu } from 'lucide-react';
+import { Sun, Moon, Cpu, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import type { GameCanvasCommand } from '@/components/game/GameCanvas';
+import type { GameCanvasCommand, GameCanvasRef } from '@/components/game/GameCanvas';
+import { useRef } from 'react';
+import { useWallet } from '@/hooks/useWallet';
+import { IpfsService } from '@/lib/ipfsService';
+import { NEXUS_DRIVE_ADDRESS, NEXUS_DRIVE_ABI } from '@/lib/nexusDriveContract';
 
 // Dynamically import GameCanvas to avoid SSR issues with PixiJS
 const GameCanvas = dynamic(
@@ -34,6 +38,9 @@ export default function Home() {
 
   const [fitnessHistory, setFitnessHistory] = useState<FitnessDataPoint[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>([]);
+
+  const { account, balance, connectWallet, getWalletClient, publicClient, isConnecting } = useWallet();
+  const gameCanvasRef = useRef<GameCanvasRef>(null);
 
   const addLog = useCallback((message: string) => {
     setLogs((prev) => [...prev.slice(-50), { timestamp: new Date(), message }]);
@@ -89,6 +96,70 @@ export default function Home() {
     setTimeout(() => setCommand(null), 100);
   }, [addLog, parameters.trackIndex]);
 
+  const handleSaveToIpfs = useCallback(async () => {
+    const bestModel = gameCanvasRef.current?.exportBestModel();
+    if (!bestModel) {
+      addLog('No model to save.');
+      return;
+    }
+
+    const ipfs = new IpfsService();
+    try {
+      addLog('Uploading model to IPFS...');
+      const cid = await ipfs.uploadModel(bestModel);
+      addLog(`Model uploaded. CID: ${cid}`);
+
+      const walletClient = getWalletClient();
+      if (walletClient) {
+        addLog('Registering model on blockchain...');
+        const hash = await walletClient.writeContract({
+          address: NEXUS_DRIVE_ADDRESS,
+          abi: NEXUS_DRIVE_ABI,
+          functionName: 'registerModel',
+          args: [cid]
+        });
+        addLog('Waiting for transaction...');
+        await publicClient.waitForTransactionReceipt({ hash });
+        addLog('Model registered successfully!');
+      }
+    } catch (err) {
+      addLog(`Error saving model: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }, [addLog, getWalletClient, publicClient]);
+
+  const handleLoadFromIpfs = useCallback(async () => {
+    if (!account) {
+      addLog('Connect wallet first.');
+      return;
+    }
+    try {
+      addLog('Fetching models from blockchain...');
+      const cids = await publicClient.readContract({
+        address: NEXUS_DRIVE_ADDRESS,
+        abi: NEXUS_DRIVE_ABI,
+        functionName: 'getUserModels',
+        args: [account]
+      }) as string[];
+
+      if (cids.length === 0) {
+        addLog('No models found for this account.');
+        return;
+      }
+
+      const latestCid = cids[cids.length - 1];
+      if (!latestCid) return;
+
+      addLog(`Downloading model: ${latestCid}...`);
+      const ipfs = new IpfsService();
+      const modelData = await ipfs.fetchModel(latestCid);
+
+      gameCanvasRef.current?.importModel(modelData);
+      addLog('Model loaded successfully.');
+    } catch (err) {
+      addLog(`Error loading model: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }, [account, addLog, publicClient]);
+
   const toggleDarkMode = () => {
     setIsDarkMode(!isDarkMode);
     document.documentElement.classList.toggle('dark');
@@ -112,10 +183,20 @@ export default function Home() {
 
         <div className="flex items-center gap-4">
           <span className="px-3 py-1 border-2 border-border bg-secondary-background font-mono text-sm">
-            v2.4.0-alpha
+            v0.4.0-alpha
           </span>
           <Button variant="neutral" size="icon" onClick={toggleDarkMode}>
             {isDarkMode ? <Sun className="size-4" /> : <Moon className="size-4" />}
+          </Button>
+
+          <Button
+            variant={account ? "neutral" : "default"}
+            onClick={connectWallet}
+            disabled={isConnecting}
+            className="flex items-center gap-2"
+          >
+            <Wallet className="size-4" />
+            {account ? `${account.slice(0, 6)}... (${balance} ETH)` : isConnecting ? "Connecting..." : "Connect"}
           </Button>
         </div>
       </header>
@@ -133,10 +214,14 @@ export default function Home() {
             onReset={handleReset}
             onSlowDown={handleSlowDown}
             onSpeedUp={handleSpeedUp}
+            onSaveToIpfs={handleSaveToIpfs}
+            onLoadFromIpfs={handleLoadFromIpfs}
+            isWalletConnected={!!account}
           />
 
           <div className="flex-1 border-2 border-border bg-secondary-background shadow-shadow overflow-hidden">
             <GameCanvas
+              ref={gameCanvasRef}
               addLog={addLog}
               trackIndex={parameters.trackIndex}
               command={command}
@@ -185,7 +270,6 @@ export default function Home() {
         <nav className="flex gap-6 text-foreground/80">
           <a href="#" className="hover:underline">Documentation</a>
           <a href="#" className="hover:underline">GitHub</a>
-          <a href="#" className="hover:underline">Models</a>
         </nav>
       </footer>
     </div>

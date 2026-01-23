@@ -5,6 +5,7 @@ import "./globals.css";
 import { TRPCReactProvider } from "@/trpc/react";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/layout/AppSidebar";
+import { Toaster } from "@/components/ui/sonner";
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -34,6 +35,7 @@ export default function RootLayout({
           <SidebarProvider>
             <AppSidebar />
             <SidebarInset>{children}</SidebarInset>
+            <Toaster />
           </SidebarProvider>
         </TRPCReactProvider>
       </body>

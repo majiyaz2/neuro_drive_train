@@ -12,16 +12,19 @@ declare module '@react-three/fiber' {
 }
 
 // Sensor configuration for raycasting
-const rayLength = 5
+const rayLength = 10
 
 // Sensor positions relative to the chassis
 // Each sensor has an offset from the chassis center and a direction
+// We use the same angles as the 2D car: [-70, -35, 0, 35, 70]
+// All sensors start from the same front-center position to match 2D logic
+const frontCenter: [number, number, number] = [0, 0.3, 0];
 const sensorPositions = [
-    { offset: [0, 0.3, 2], direction: [0, 0, 1] },        // Front center
-    { offset: [0.8, 0.3, 1.8], direction: [0.5, 0, 1] },  // Front right
-    { offset: [-0.8, 0.3, 1.8], direction: [-0.5, 0, 1] }, // Front left
-    { offset: [1, 0.3, 0], direction: [1, 0, 0] },         // Right side
-    { offset: [-1, 0.3, 0], direction: [-1, 0, 0] },       // Left side
+    { offset: frontCenter, direction: [Math.sin(-70 * Math.PI / 180), 0, Math.cos(-70 * Math.PI / 180)] },
+    { offset: frontCenter, direction: [Math.sin(-35 * Math.PI / 180), 0, Math.cos(-35 * Math.PI / 180)] },
+    { offset: frontCenter, direction: [0, 0, 1] },
+    { offset: frontCenter, direction: [Math.sin(35 * Math.PI / 180), 0, Math.cos(35 * Math.PI / 180)] },
+    { offset: frontCenter, direction: [Math.sin(70 * Math.PI / 180), 0, Math.cos(70 * Math.PI / 180)] },
 ]
 
 // Ray result type matching the original game.js pattern
@@ -77,7 +80,9 @@ function RaySensor({
                     : null,
                 rayIndex,
             }
-            onResult(result)
+   
+            onResult(result)              
+            
         },
         // IMPORTANT: Include from and to in deps so hook re-runs when they change
         [from[0], from[1], from[2], to[0], to[1], to[2]]

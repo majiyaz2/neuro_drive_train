@@ -27,6 +27,8 @@ contract NexusDrive {
     uint256 public totalAttempts;
     mapping(uint256 => Attempt) public attempts;
 
+    mapping(address => string[]) public userModels;
+
     event TrackAttempted(
         uint256 indexed trackId,
         address indexed player,
@@ -39,6 +41,7 @@ contract NexusDrive {
         address player
     );
     event RewardPaid(address indexed player, uint256 amount);
+    event ModelRegistered(address indexed user, string cid);
 
     modifier onlyOwner() {
         require(msg.sender == owner, "Only owner");
@@ -73,11 +76,26 @@ contract NexusDrive {
         emit TrackAttempted(trackId, msg.sender, totalAttempts);
     }
 
-    function claimVictory(uint256 attemptId, bytes32 modelHash) external {
+    function claimVictory(
+        uint256 attemptId,
+        bytes32 modelHash,
+        uint256 nonce
+    ) external {
         Attempt storage attempt = attempts[attemptId];
         require(attempt.player == msg.sender, "Not your attempt");
         require(attempt.isPending, "Already claimed");
         require(!usedModelHashes[modelHash], "Model already used");
+
+        // Proof of Work Verification (Robustness check)
+        // Require hash to start with at least two zeros (hex)
+        bytes32 proof = keccak256(
+            abi.encodePacked(attemptId, modelHash, nonce)
+        );
+        require(
+            uint256(proof) <
+                0x0100000000000000000000000000000000000000000000000000000000000000,
+            "Invalid proof of work"
+        );
 
         attempt.modelHash = modelHash;
         usedModelHashes[modelHash] = true;
@@ -105,5 +123,16 @@ contract NexusDrive {
         uint256 multiplier
     ) external onlyOwner {
         tracks[id] = Track(fee, multiplier, true);
+    }
+
+    function registerModel(string calldata cid) external {
+        userModels[msg.sender].push(cid);
+        emit ModelRegistered(msg.sender, cid);
+    }
+
+    function getUserModels(
+        address user
+    ) external view returns (string[] memory) {
+        return userModels[user];
     }
 }

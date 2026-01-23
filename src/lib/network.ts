@@ -23,6 +23,7 @@ export class Layer {
 
 export interface RankableChromosome {
     chromosome: number[];
+    dimensions: number[];
     smallestEdgeDistance: number;
     highestCheckpoint: number;
     distanceCovered: number;
@@ -69,6 +70,7 @@ export class Network {
         }
         return {
             chromosome,
+            dimensions: this.dimensions,
             smallestEdgeDistance: this.smallestEdgeDistance,
             highestCheckpoint: this.highestCheckpoint,
             distanceCovered: this.distanceCovered,
@@ -77,18 +79,32 @@ export class Network {
         }
     }
 
-    deserialize(chromosome: number[]): void {
+    deserialize(data: number[] | RankableChromosome): void {
+        const chromosome = Array.isArray(data) ? data : data.chromosome;
+
+        if (!chromosome || !Array.isArray(chromosome)) {
+            console.error("Invalid chromosome data for deserialization:", data);
+            throw new Error("chromosome is not iterable");
+        }
+
         let layerIndex = 0;
         let outputIndex = 0;
         let inputIndex = 0;
 
         for (const gene of chromosome) {
-            this.layers[layerIndex]!.weights[outputIndex]![inputIndex] = gene;
+            const layer = this.layers[layerIndex];
+            if (!layer) break;
+
+            const weights = layer.weights[outputIndex];
+            if (!weights) break;
+
+            weights[inputIndex] = gene;
             inputIndex++;
-            if (inputIndex > this.layers[layerIndex]!.weights[outputIndex]!.length - 1) {
+
+            if (inputIndex > weights.length - 1) {
                 inputIndex = 0;
                 outputIndex++;
-                if (outputIndex > this.layers[layerIndex]!.weights!.length - 1) {
+                if (outputIndex > layer.weights.length - 1) {
                     outputIndex = 0;
                     layerIndex++;
                 }

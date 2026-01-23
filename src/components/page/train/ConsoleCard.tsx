@@ -32,7 +32,7 @@ export function ConsoleCard({ logs }: ConsoleCardProps) {
             <CardContent>
                 <div
                     ref={scrollRef}
-                    className="h-[120px] overflow-y-auto bg-secondary-background border-2 border-border p-2 font-mono text-xs space-y-1"
+                    className="h-[250px] overflow-y-auto bg-secondary-background border-2 border-border p-2 font-mono text-xs space-y-1"
                 >
                     {logs.length > 0 ? (
                         logs.map((log, index) => (

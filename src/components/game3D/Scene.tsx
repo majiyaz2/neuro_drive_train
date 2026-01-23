@@ -9,19 +9,32 @@ import { useToggledControl } from '@/hooks/use-toggled-control'
 import { Plane } from './Plane'
 import Vehicle from './Vehicle'
 import { Road } from './Road'
-import { createPublicClient, createWalletClient, custom, http, type Address, hexToBytes, bytesToHex } from 'viem'
-import { sepolia } from 'viem/chains'
-import { NEXUS_DRIVE_ADDRESS, NEXUS_DRIVE_ABI } from '@/lib/nexusDriveContract'
-import { IpfsService } from '@/lib/ipfsService'
+
+
+
+import { Checkpoint } from './Checkpoint'
+import { keccak256, encodePacked } from 'viem'
+
+const TILE_SIZE = 8;
+const TOTAL_CHECKPOINTS = 4;
+
+const CHECKPOINT_POSITIONS: [number, number, number, number][] = [
+    [TILE_SIZE * 2, 2, 0, Math.PI / 2], // Mid bottom straight
+    [TILE_SIZE * 5, 2, TILE_SIZE * 3.5, 0], // Mid right column
+    [TILE_SIZE * 2, 2, TILE_SIZE * 7, Math.PI / 2], // Mid top straight
+    [-TILE_SIZE, 2, TILE_SIZE * 3.5, 0], // Mid left column
+];
 
 export const Scene = ({
     onBack,
     attemptId,
-    account
+    account,
+    customModel
 }: {
     onBack: () => void,
-    attemptId: bigint | null,
-    account: Address | null
+    attemptId?: bigint | null,
+    account?: string | null,
+    customModel?: any
 }) => {
     const ToggledDebug = useToggledControl(Debug, '?')
 
@@ -29,70 +42,99 @@ export const Scene = ({
     const [telemetry, setTelemetry] = useState({ speed: 0, checkpoints: 0 })
     const [victoryStats, setVictoryStats] = useState<{ modelHash: string; nonce: string } | null>(null)
     const [isSimulating, setIsSimulating] = useState(true)
+    const [nextCheckpoint, setNextCheckpoint] = useState(0)
+    const [isGeneratingProof, setIsGeneratingProof] = useState(false)
 
-    // Throttle ref for progress updates
+    // Refs for performant tracking
+    const nextCheckpointRef = React.useRef(0)
+    const speedRef = React.useRef(0)
     const lastUpdateRef = React.useRef(0)
 
-    const handleProgress = useCallback((speed: number, checkpoints: number) => {
-        // Throttle updates to every 100ms to avoid excessive re-renders
+    const handleProgress = useCallback((speed: number) => {
+        speedRef.current = speed
+
+        // Only trigger a re-render for speed every 100ms
         const now = Date.now()
         if (now - lastUpdateRef.current > 100) {
-            setTelemetry({ speed, checkpoints })
+            setTelemetry(prev => ({
+                ...prev,
+                speed: speedRef.current,
+                checkpoints: nextCheckpointRef.current // Sync with latest checkpoint
+            }))
             lastUpdateRef.current = now
         }
     }, [])
+    // const handleProgress = useCallback((speed: number) => {
+    //     speedRef.current = speed
+        
+    //     // Only trigger a re-render for speed every 100ms
+    //     const now = Date.now()
+    //     if (now - lastUpdateRef.current > 100) {
+    //         setTelemetry(prev => ({ 
+    //             ...prev, 
+    //             speed: speedRef.current,
+    //             checkpoints: nextCheckpointRef.current // Sync with latest checkpoint
+    //         }))
+    //         lastUpdateRef.current = now
+    //     }
+    // }, [])
 
-    const handleGoalReached = useCallback((stats: { modelHash: string; nonce: string }) => {
-        setVictoryStats(stats)
-        setIsSimulating(false)
-    }, [])
 
-    const handleClaim = async () => {
-        if (!account || !attemptId || !victoryStats || !window.ethereum) return;
+    const handleVictory = useCallback(async () => {
+        setIsGeneratingProof(true)
+        console.log("🏁 Race Complete! Generating proof...")
 
-        const ipfs = new IpfsService(); // Using simulation mode unless key is provided
-        const publicClient = createPublicClient({
-            chain: sepolia,
-            transport: http("https://ethereum-sepolia-rpc.publicnode.com"),
-        });
+        // Use model CID or a hash of the custom model as modelHash
+        // For now, using a placeholder that looks like a real hash
+        const modelHash = keccak256(encodePacked(['string'], [customModel?.name || "default_model"]))
 
-        const walletClient = createWalletClient({
-            account,
-            chain: sepolia,
-            transport: custom(window.ethereum),
-        });
+        // Simple Proof of Work (Proof of Racing)
+        // Find a nonce such that keccak256(attemptId + modelHash + nonce) starts with 00
+        let nonce = 0
+        const id = attemptId || 0n
 
-        try {
-            console.log("Uploading model to IPFS...");
-            // In a real scenario, we'd upload actual weights here
-            const dummyModel = {
-                weights: [0.1, -0.2, 0.5],
-                stats: victoryStats,
-                timestamp: Date.now()
-            };
-            const ipfsHash = await ipfs.uploadModel(dummyModel);
+        // Small delay to simulate computation and let UI update
+        await new Promise(resolve => setTimeout(resolve, 1500))
 
-            // Convert IPFS CID (string) to bytes32 for the contract
-            // For now, we'll hash the string to simulate a bytes32 modelHash
-            // Realistic implementation would involve decoding Base58 CID
-            const modelHashBytes = bytesToHex(new TextEncoder().encode(ipfsHash.slice(0, 31)));
-
-            console.log("Claiming victory on-chain...");
-            const hash = await walletClient.writeContract({
-                address: NEXUS_DRIVE_ADDRESS,
-                abi: NEXUS_DRIVE_ABI,
-                functionName: "claimVictory",
-                args: [attemptId, modelHashBytes as `0x${string}`]
-            });
-
-            await publicClient.waitForTransactionReceipt({ hash });
-            console.log("Victory claimed successfully!");
-            setVictoryStats(null);
-            onBack();
-        } catch (err) {
-            console.error("Claim failed:", err);
+        while (nonce < 100000) {
+            const hash = keccak256(encodePacked(['uint256', 'bytes32', 'uint256'], [id, modelHash, BigInt(nonce)]))
+            if (hash.startsWith('0x00')) {
+                break
+            }
+            nonce++
         }
-    };
+
+        setVictoryStats({ modelHash, nonce: nonce.toString() })
+        setIsSimulating(false)
+        setIsGeneratingProof(false)
+    }, [customModel, attemptId])
+
+    const handleCheckpointHit = useCallback((index: number) => {
+        // Ignore hits for checkpoints we've already passed or just hit
+        if (index < nextCheckpointRef.current) return;
+
+        if (index === nextCheckpointRef.current) {
+            console.log(`✅ Checkpoint ${index} hit!`)
+            const newNext = index + 1
+            nextCheckpointRef.current = newNext
+            setNextCheckpoint(newNext)
+
+            // Immediate state update for checkpoints so UI is responsive, 
+            // but use the latest speedRef to avoid "jumping" back to a throttled speed
+            setTelemetry(prev => ({
+                ...prev,
+                checkpoints: newNext,
+                speed: speedRef.current
+            }))
+
+            if (newNext === TOTAL_CHECKPOINTS) {
+                handleVictory()
+            }
+        } else {
+            // Only warn if they hit a future checkpoint while skipping others
+            console.warn(`❌ Wrong checkpoint. Expected ${nextCheckpointRef.current}, hit ${index}. Please don't skip!`)
+        }
+    }, [handleVictory])
 
     return (
         <div style={{ width: '100%', height: '100%', position: 'relative' }}>
@@ -116,15 +158,27 @@ export const Scene = ({
                     <ToggledDebug>
                         <Plane position={[15, 0, 30]} rotation={[-Math.PI / 2, 0, 0]} userData={{ id: 'floor' }} />
                         <Vehicle
-                            position={[0, 2, 0]}
-                            rotation={[0, -Math.PI / 4, 0]}
+                            position={[0, 3, 0]}
+                            rotation={[0, Math.PI / 2, 0]}
                             angularVelocity={[0, 0.5, 0]}
                             enableRays={true}
                             networkIndex={1}
                             onProgress={handleProgress}
-                            onGoalReached={handleGoalReached}
+                            customModel={customModel}
                         />
                         <Road position={[0, 0.05, 0]} />
+
+                        {/* Render Checkpoints */}
+                        {CHECKPOINT_POSITIONS.map((pos, i) => (
+                            <Checkpoint
+                                key={i}
+                                index={i}
+                                position={[pos[0], pos[1], pos[2]]}
+                                rotation={[0, pos[3], 0]}
+                                onHit={handleCheckpointHit}
+                                isActive={i === nextCheckpoint}
+                            />
+                        ))}
                     </ToggledDebug>
                 </Physics>
                 <Suspense fallback={null}>
@@ -137,11 +191,20 @@ export const Scene = ({
             <HudOverlay
                 speed={telemetry.speed}
                 checkpoints={telemetry.checkpoints}
-                totalCheckpoints={10}
+                totalCheckpoints={TOTAL_CHECKPOINTS}
                 sessionActive={isSimulating}
-                powProgress={isSimulating ? (telemetry.checkpoints / 10) * 100 : 100}
+                powProgress={isGeneratingProof ? 50 : (telemetry.checkpoints / TOTAL_CHECKPOINTS) * 100}
                 onBack={onBack}
             />
+
+            {isGeneratingProof && (
+                <div className="absolute inset-0 flex items-center justify-center bg-background/40 backdrop-blur-sm z-40">
+                    <div className="bg-card p-8 border-4 border-border shadow-shadow animate-pulse text-center">
+                        <h2 className="text-2xl font-heading uppercase mb-2">Generating Neural Proof</h2>
+                        <p className="font-mono text-xs">MINING POW NONCE FOR BLOCKCHAIN VERIFICATION...</p>
+                    </div>
+                </div>
+            )}
 
             {victoryStats && (
                 <VictoryModal
@@ -149,7 +212,11 @@ export const Scene = ({
                     nonce={victoryStats.nonce}
                     difficulty="MEDIUM"
                     reward="0.05"
-                    onClaim={handleClaim}
+                    attemptId={attemptId}
+                    onClaim={() => {
+                        console.log("Victory claimed successfully!")
+                        onBack()
+                    }}
                     onClose={() => setVictoryStats(null)}
                 />
             )}

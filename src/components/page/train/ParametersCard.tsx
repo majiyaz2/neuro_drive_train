@@ -92,6 +92,9 @@ export function ParametersCard({
                             })
                         }
                     />
+                    <p className="text-xs text-muted-foreground">
+                        Number of cars per round
+                    </p>
                 </div>
 
                 {/* Keep Count */}
@@ -116,14 +119,14 @@ export function ParametersCard({
                         }
                     />
                     <p className="text-xs text-muted-foreground">
-                        Best performers kept per generation
+                        Best performers kept per round
                     </p>
                 </div>
 
                 {/* Max Iterations */}
                 <div className="space-y-2">
                     <div className="flex justify-between text-sm">
-                        <span>Max Iterations</span>
+                        <span>Max Rounds</span>
                         <span className="font-mono bg-main px-2 border-2 border-border">
                             {localParams.maxIterations}
                         </span>
@@ -142,14 +145,14 @@ export function ParametersCard({
                         }
                     />
                     <p className="text-xs text-muted-foreground">
-                        Training generations before stopping
+                        Training rounds before stopping
                     </p>
                 </div>
 
                 {/* Mutation Rate */}
                 <div className="space-y-2">
                     <div className="flex justify-between text-sm">
-                        <span>Mutation Rate</span>
+                        <span>Exploration Rate</span>
                         <span className="font-mono bg-main px-2 border-2 border-border">
                             {(localParams.mutationRate * 100).toFixed(1)}%
                         </span>
@@ -168,7 +171,7 @@ export function ParametersCard({
                         }
                     />
                     <p className="text-xs text-muted-foreground">
-                        Chance of random gene changes per offspring
+                        Chance of the model exploring new paths
                     </p>
                 </div>
 
@@ -179,7 +182,7 @@ export function ParametersCard({
                         <div>
                             <span className="text-sm">Hypermutation</span>
                             <p className="text-xs text-muted-foreground">
-                                Auto-boost mutation when stuck
+                                Use this when the model is not making progress
                             </p>
                         </div>
                     </div>

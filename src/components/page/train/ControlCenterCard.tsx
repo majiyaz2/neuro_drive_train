@@ -13,6 +13,9 @@ interface ControlCenterCardProps {
     onReset: () => void;
     onSlowDown: () => void;
     onSpeedUp: () => void;
+    onSaveToIpfs?: () => void;
+    onLoadFromIpfs?: () => void;
+    isWalletConnected?: boolean;
 }
 
 export function ControlCenterCard({
@@ -24,6 +27,9 @@ export function ControlCenterCard({
     onReset,
     onSlowDown,
     onSpeedUp,
+    onSaveToIpfs,
+    onLoadFromIpfs,
+    isWalletConnected = false,
 }: ControlCenterCardProps) {
 
     return (
@@ -61,6 +67,26 @@ export function ControlCenterCard({
                 >
                     <RotateCcw className="size-4" />
                     Reset
+                </Button>
+            </div>
+
+            {/* IPFS Controls */}
+            <div className="flex items-center gap-2 px-4 border-l-2 border-r-2 border-border">
+                <Button
+                    variant="neutral"
+                    onClick={onSaveToIpfs}
+                    disabled={isSimulating || !isWalletConnected}
+                    title={!isWalletConnected ? "Connect wallet to save" : "Save Best Model to IPFS & Blockchain"}
+                >
+                    Save Model
+                </Button>
+                <Button
+                    variant="neutral"
+                    onClick={onLoadFromIpfs}
+                    disabled={isSimulating || !isWalletConnected}
+                    title={!isWalletConnected ? "Connect wallet to load" : "Load Model from IPFS"}
+                >
+                    Load Model
                 </Button>
             </div>
 

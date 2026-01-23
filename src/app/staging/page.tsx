@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Trophy, ChevronRight, Activity, Wallet, Info } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
+import { Toaster } from "@/components/ui/sonner";
+import { toast } from "sonner";
 import {
     createPublicClient,
     createWalletClient,
@@ -22,6 +24,8 @@ import {
 import { sepolia } from "viem/chains";
 import { NEXUS_DRIVE_ADDRESS, NEXUS_DRIVE_ABI } from "@/lib/nexusDriveContract";
 import { useEffect, useCallback } from "react";
+import { useWallet } from "@/hooks/useWallet";
+import { IpfsService } from "@/lib/ipfsService";
 
 interface Track {
     index: number;
@@ -31,6 +35,7 @@ interface Track {
     difficulty: string;
     rewardMultiplier: string;
 }
+
 
 const TRACKS: Track[] = [
     { index: 0, name: "Neon Circuit", fee: "0.0001", difficulty: "EASY", rewardMultiplier: "1.0x", description: "A high-speed neon-lit circuit with sharp turns and long straights. Perfect for testing raw speed." },
@@ -43,34 +48,46 @@ const TRACKS: Track[] = [
 export default function StagingPage() {
     const [selectedTrack, setSelectedTrack] = useState<number | null>(null);
     const [isSimulating, setIsSimulating] = useState(false);
-    const [account, setAccount] = useState<Address | null>(null);
-    const [balance, setBalance] = useState<string>("0");
-    const [isPending, setIsPending] = useState(false);
     const [activeAttemptId, setActiveAttemptId] = useState<bigint | null>(null);
+    const [loadedModel, setLoadedModel] = useState<any>(null);
+    const [isPending, setIsPending] = useState(false);
 
-    // Clients
-    const publicClient = createPublicClient({
-        chain: sepolia,
-        transport: http("https://ethereum-sepolia-rpc.publicnode.com"),
-    });
+    const {
+        account,
+        balance,
+        connectWallet,
+        getWalletClient,
+        publicClient,
+        isConnecting,
+        fetchBalance
+    } = useWallet();
 
-    const fetchBalance = useCallback(async (addr: Address) => {
+    const handleLoadModel = async () => {
+        if (!account) return;
         try {
-            const bal = await publicClient.getBalance({ address: addr });
-            setBalance(Number(formatEther(bal)).toFixed(3));
-        } catch (err) {
-            console.error("Failed to fetch balance:", err);
-        }
-    }, [publicClient]);
+            setIsPending(true);
+            const cids = await publicClient.readContract({
+                address: NEXUS_DRIVE_ADDRESS,
+                abi: NEXUS_DRIVE_ABI,
+                functionName: 'getUserModels',
+                args: [account]
+            }) as string[];
 
-    const connectWallet = async () => {
-        if (!window.ethereum) return;
-        try {
-            const accounts = await window.ethereum.request({ method: "eth_requestAccounts" }) as Address[];
-            setAccount(accounts[0]);
-            fetchBalance(accounts[0]);
+            if (cids.length === 0) {
+                toast.error("No registered models found for this wallet.");
+                return;
+            }
+
+            const latestCid = cids[cids.length - 1];
+            const ipfs = new IpfsService();
+            const modelData = await ipfs.fetchModel(latestCid!);
+            setLoadedModel(modelData);
+            toast.success("Model loaded from blockchain!");
         } catch (err) {
-            console.error("Connection failed:", err);
+            console.error("Failed to load model:", err);
+            toast.error("Failed to load model from IPFS/Blockchain.");
+        } finally {
+            setIsPending(false);
         }
     };
 
@@ -138,6 +155,7 @@ export default function StagingPage() {
                         }}
                         attemptId={activeAttemptId}
                         account={account}
+                        customModel={loadedModel}
                     />
                 ) : (
                     <>
@@ -149,7 +167,7 @@ export default function StagingPage() {
                                 </div>
                                 <p className="text-muted-foreground font-mono flex items-center gap-2">
                                     <Info className="size-3" />
-                                    CHOOSE A CIRCUIT CORE TO COMMENCE TRAINING SEQUENCE
+                                    CHOOSE A CIRCUIT CORE TO COMMENCE TESTING SEQUENCE
                                 </p>
                             </div>
 
@@ -164,10 +182,21 @@ export default function StagingPage() {
                                             {account ? `${account.slice(0, 6)}...` : "Wallet"}
                                         </p>
                                         <p className="text-sm font-bold">
-                                            {account ? `${balance} ETH` : "CONNECT"}
+                                            {account ? `${balance} ETH` : isConnecting ? "SYNCING..." : "CONNECT"}
                                         </p>
                                     </div>
                                 </div>
+                                {account && (
+                                    <Button
+                                        variant="neutral"
+                                        className="h-full border-2 border-border shadow-shadow"
+                                        onClick={handleLoadModel}
+                                        disabled={isPending}
+                                    >
+                                        <Trophy className="size-4" />
+                                        {loadedModel ? "Swap Model" : "Load My Model"}
+                                    </Button>
+                                )}
                             </div>
                         </header>
                         <ScrollArea className="flex-1">

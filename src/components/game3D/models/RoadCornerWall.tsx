@@ -8,7 +8,7 @@ const WALL_HEIGHT = 2;
 const WALL_THICKNESS = 0.3;
 
 // Number of segments to approximate the curve
-const CURVE_SEGMENTS = 10;
+const CURVE_SEGMENTS = 0;
 
 interface WallSegmentProps {
     position: [number, number, number];

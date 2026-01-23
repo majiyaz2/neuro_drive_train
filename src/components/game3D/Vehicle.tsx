@@ -23,8 +23,9 @@ export type VehicleProps = Required<Pick<BoxProps, 'angularVelocity' | 'position
   width?: number
   enableRays?: boolean
   networkIndex?: number
-  onProgress?: (speed: number, checkpoints: number) => void
+  onProgress?: (speed: number) => void
   onGoalReached?: (stats: { modelHash: string; nonce: string }) => void
+  customModel?: any
 }
 
 function Vehicle({
@@ -43,6 +44,7 @@ function Vehicle({
   networkIndex = 0,
   onProgress,
   onGoalReached,
+  customModel,
 }: VehicleProps) {
   const wheels = [useRef<Group>(null), useRef<Group>(null), useRef<Group>(null), useRef<Group>(null)]
   const chassisGroup = useRef<Group>(null)
@@ -50,7 +52,7 @@ function Vehicle({
   const controls = useControls()
 
   // Load neural network for client-side inference (no API calls per frame)
-  const { predict, isReady: networkReady } = useNeuralNetwork(networkIndex)
+  const { predict, isReady: networkReady } = useNeuralNetwork(networkIndex, customModel)
 
   // Store latest ray results for neural network input
   const latestRayResultsRef = useRef<RayResult[]>([])
@@ -148,16 +150,8 @@ function Vehicle({
     )
     const speedKmh = speedMs * 3.6
 
-    // Notify progress (simplified checkpoint tracking for now)
-    onProgress?.(speedKmh, lastCheckpointRef.current)
-
-    // Handle session completion (mock condition)
-    if (lastCheckpointRef.current >= 10) { // Total 10 checkpoints
-      onGoalReached?.({
-        modelHash: "0xQmZ8yZ...f3D6",
-        nonce: "125849"
-      })
-    }
+    // Notify progress
+    onProgress?.(speedKmh)
 
     // Toggle autonomous mode on 'N' key press (edge detection)
     if (autonomous && !lastAutonomousKeyRef.current) {
@@ -170,11 +164,14 @@ function Vehicle({
       // AUTONOMOUS MODE: Run neural network prediction every frame
 
       if (networkReady) {
-        // Get ray distances from latest results, default to max ray length (5) if no results
-        const defaultRayLength = 5
-        const rayDistances = latestRayResultsRef.current.length > 0
+        // Get ray distances from latest results, default to max ray length (20) if no results
+        const defaultRayLength = 7
+        const rawDistances = latestRayResultsRef.current.length > 0
           ? latestRayResultsRef.current.map(r => r.hitDistance)
-          : [defaultRayLength, defaultRayLength, defaultRayLength, defaultRayLength, defaultRayLength]
+          : Array(5).fill(defaultRayLength)
+
+        // Normalize inputs to [0, 1] range to match 2D training environment
+        const rayDistances = rawDistances.map(d => d / defaultRayLength)
 
         // Run prediction every frame
         const outputs = predict(rayDistances)
@@ -182,27 +179,40 @@ function Vehicle({
         if (outputs) {
           nnOutputsRef.current = outputs
 
+          // Neural Network Output Mapping (matching Car.ts):
+          // outputs[0] -> Acceleration
+          // outputs[1] -> Steering
+          // outputs[2] -> Brake
+
           // Apply steering to FRONT wheels (indices 0 and 1)
-          vehicleApi.setSteeringValue(outputs[0] ?? 0, 0)
-          vehicleApi.setSteeringValue(outputs[0] ?? 0, 1)
+          // Normalize steering output (outputs[1] is in [-1, 1]) by multiplying with steer factor
+          // Invert steering: in 2D, positive = turn right; in 3D physics, positive = turn left
+          const steeringValue = -(outputs[0] ?? 0) * steer
+          vehicleApi.setSteeringValue(steeringValue, 0)
+          vehicleApi.setSteeringValue(steeringValue, 1)
 
           // Apply engine force to BACK wheels (indices 2 and 3)
-          const engineForce = (outputs[1] ?? 0) * -1500
+          // match 2D logic: accelerate if outputs[0] > 0
+          const shouldAccelerate = (outputs[1] ?? 0) > 0
+          const engineForce = shouldAccelerate ? -force : 0
           vehicleApi.applyEngineForce(engineForce, 2)
           vehicleApi.applyEngineForce(engineForce, 3)
+
+          // Apply braking logic: match 2D logic if outputs[2] > 0.5
+          const shouldBrake = (outputs[2] ?? 0) > 0.5
+          for (let b = 2; b < 4; b++) {
+            vehicleApi.setBrake(shouldBrake ? maxBrake : 0, b)
+          }
         } else {
-          // No outputs from neural network - use default values (no steering, move forward)
+          // No outputs from neural network - fallback to moving forward
           vehicleApi.setSteeringValue(0, 0)
           vehicleApi.setSteeringValue(0, 1)
-          vehicleApi.applyEngineForce(-1500, 2)
-          vehicleApi.applyEngineForce(-1500, 3)
+          vehicleApi.applyEngineForce(-force, 2)
+          vehicleApi.applyEngineForce(-force, 3)
+          for (let b = 2; b < 4; b++) {
+            vehicleApi.setBrake(0, b)
+          }
         }
-
-      }
-
-      // Still allow braking in autonomous mode
-      for (let b = 2; b < 4; b++) {
-        vehicleApi.setBrake(brake ? maxBrake : 0, b)
       }
     } else {
       // MANUAL MODE: Use keyboard controls
@@ -229,7 +239,13 @@ function Vehicle({
   })
 
   return (
-    <group ref={vehicle} position={[0, -0.3, 0]}>
+    <group ref={vehicle}>
+      <CameraFollow
+              targetRef={chassisBody}
+              offset={[0, 5, -10]}
+              lerpFactor={0.05}
+              enabled={true}
+            />
       <group ref={chassisGroup}>
         <TaxiChassis ref={chassisBody} />
         <CarRays

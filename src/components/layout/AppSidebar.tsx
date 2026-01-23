@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, FlaskConical } from "lucide-react";
+import { Home, FlaskConical, CarTaxiFront } from "lucide-react";
 import {
     Sidebar,
     SidebarContent,
@@ -20,13 +20,13 @@ const navItems = [
     {
         title: "Training",
         href: "/",
-        icon: Home,
+        icon: FlaskConical,
         description: "2D Neural Network Training",
     },
     {
-        title: "Staging",
+        title: "Testing",
         href: "/staging",
-        icon: FlaskConical,
+        icon: CarTaxiFront,
         description: "3D Vehicle Testing",
     },
 ];
@@ -37,7 +37,7 @@ export function AppSidebar() {
     return (
         <Sidebar collapsible="icon">
             <SidebarHeader>
-                <div className="flex items-center gap-2 px-2">
+                <div className="flex items-center gap-2">
                     <SidebarTrigger />
                     <span className="font-heading text-sm group-data-[collapsible=icon]:hidden">
                         Navigation
@@ -46,7 +46,6 @@ export function AppSidebar() {
             </SidebarHeader>
             <SidebarContent>
                 <SidebarGroup>
-                    <SidebarGroupLabel>Pages</SidebarGroupLabel>
                     <SidebarGroupContent>
                         <SidebarMenu>
                             {navItems.map((item) => (

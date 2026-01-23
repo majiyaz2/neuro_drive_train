@@ -2,14 +2,18 @@
 
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Trophy, Hash, ShieldCheck, Share2, ArrowRight } from "lucide-react";
+import { Trophy, Hash, ShieldCheck, Share2, ArrowRight, Loader2 } from "lucide-react";
 import * as React from "react";
+import { toast } from "sonner";
+import { useWallet } from "@/hooks/useWallet";
+import { NEXUS_DRIVE_ADDRESS, NEXUS_DRIVE_ABI } from "@/lib/nexusDriveContract";
 
 interface VictoryModalProps {
     modelHash: string;
     nonce: string;
     difficulty: string;
     reward: string;
+    attemptId?: bigint | null;
     onClaim: () => void;
     onClose: () => void;
 }
@@ -19,9 +23,45 @@ export function VictoryModal({
     nonce,
     difficulty,
     reward,
+    attemptId,
     onClaim,
     onClose,
 }: VictoryModalProps) {
+    const { getWalletClient, publicClient, account } = useWallet();
+    const [isPending, setIsPending] = React.useState(false);
+
+    const handleClaim = async () => {
+        if (!account || !attemptId) {
+            toast.error("No active session or wallet connected.");
+            return;
+        }
+
+        const walletClient = getWalletClient();
+        if (!walletClient) return;
+
+        try {
+            setIsPending(true);
+            const { request } = await publicClient.simulateContract({
+                account,
+                address: NEXUS_DRIVE_ADDRESS,
+                abi: NEXUS_DRIVE_ABI,
+                functionName: "claimVictory",
+                args: [attemptId, modelHash as `0x${string}`, BigInt(nonce)],
+            });
+
+            const hash = await walletClient.writeContract(request);
+            console.log("Transaction sent:", hash);
+
+            await publicClient.waitForTransactionReceipt({ hash });
+            toast.success("Victory claimed successfully! Reward transferred to your wallet.");
+            onClaim();
+        } catch (err) {
+            console.error("Claim failed:", err);
+            toast.error("Failed to claim victory. See console for details.");
+        } finally {
+            setIsPending(false);
+        }
+    };
     return (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/60 backdrop-blur-md p-4 pointer-events-auto font-base">
             <Card className="w-full max-w-lg border-4 shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] bg-card overflow-hidden">
@@ -78,10 +118,11 @@ export function VictoryModal({
                     <Button
                         size="lg"
                         className="w-full h-16 text-xl font-heading uppercase gap-3 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] hover:translate-x-1 hover:translate-y-1 hover:shadow-none"
-                        onClick={onClaim}
+                        onClick={handleClaim}
+                        disabled={isPending}
                     >
-                        Claim Victory & Register Model
-                        <ArrowRight className="size-6" />
+                        {isPending ? <Loader2 className="size-6 animate-spin" /> : "Claim Victory & Register Model"}
+                        {!isPending && <ArrowRight className="size-6" />}
                     </Button>
                     <div className="flex gap-2">
                         <Button variant="neutral" className="flex-1 gap-2" onClick={() => console.log('Share Link')}>

@@ -29,6 +29,8 @@ export interface GameCanvasRef {
     start: () => Promise<void>;
     pause: () => void;
     reset: () => void;
+    exportBestModel: () => any;
+    importModel: (modelData: any) => void;
 }
 
 export interface SimulationConfig {
@@ -399,12 +401,28 @@ export const GameCanvas = forwardRef<GameCanvasRef, GameCanvasProps>(function Ga
         await runNextGeneration();
     }, [runNextGeneration, trainingConfig, onSimulatingChange]);
 
+    const exportBestModel = useCallback(() => {
+        if (!trainerRef.current) return null;
+        const bestNetwork = trainerRef.current.networks[0];
+        return bestNetwork ? bestNetwork.serialize() : null;
+    }, []);
+
+    const importModel = useCallback((modelData: any) => {
+        if (!trainerRef.current) {
+            trainerRef.current = new Trainer(trainingConfig, addLog);
+        }
+        trainerRef.current.networks[0].deserialize(modelData);
+        addLog?.('Model imported to pilot slot.');
+    }, [trainingConfig, addLog]);
+
     // Expose control methods via ref
     useImperativeHandle(ref, () => ({
         start: startTraining,
         pause,
         reset,
-    }), [startTraining, pause, reset]);
+        exportBestModel,
+        importModel
+    }), [startTraining, pause, reset, exportBestModel, importModel]);
 
     // Keyboard handler for ESC to abort
     useEffect(() => {

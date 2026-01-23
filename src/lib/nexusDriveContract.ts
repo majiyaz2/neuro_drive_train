@@ -1,7 +1,7 @@
 // NexusDrive Contract Configuration
 // To be deployed on Sepolia testnet
 
-export const NEXUS_DRIVE_ADDRESS = "0xB6cee43BA090Bd132199503De9890C219BAe5A47" as const; // Placeholder
+export const NEXUS_DRIVE_ADDRESS = "0xDa127E35C32E0D50C96F4FBfBb07384BFbC67fb8" as const; // Placeholder
 
 export const NEXUS_DRIVE_ABI = [
     {
@@ -40,6 +40,15 @@ export const NEXUS_DRIVE_ABI = [
         "type": "event"
     },
     {
+        "anonymous": false,
+        "inputs": [
+            { "indexed": true, "internalType": "address", "name": "user", "type": "address" },
+            { "indexed": false, "internalType": "string", "name": "cid", "type": "string" }
+        ],
+        "name": "ModelRegistered",
+        "type": "event"
+    },
+    {
         "inputs": [{ "internalType": "uint256", "name": "trackId", "type": "uint256" }],
         "name": "attemptTrack",
         "outputs": [],
@@ -49,7 +58,8 @@ export const NEXUS_DRIVE_ABI = [
     {
         "inputs": [
             { "internalType": "uint256", "name": "attemptId", "type": "uint256" },
-            { "internalType": "bytes32", "name": "modelHash", "type": "bytes32" }
+            { "internalType": "bytes32", "name": "modelHash", "type": "bytes32" },
+            { "internalType": "uint256", "name": "nonce", "type": "uint256" }
         ],
         "name": "claimVictory",
         "outputs": [],
@@ -116,6 +126,20 @@ export const NEXUS_DRIVE_ABI = [
         "inputs": [],
         "name": "owner",
         "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [{ "internalType": "string", "name": "cid", "type": "string" }],
+        "name": "registerModel",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [{ "internalType": "address", "name": "user", "type": "address" }],
+        "name": "getUserModels",
+        "outputs": [{ "internalType": "string[]", "name": "", "type": "string[]" }],
         "stateMutability": "view",
         "type": "function"
     }
