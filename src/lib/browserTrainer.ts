@@ -17,7 +17,7 @@ export interface TrainingConfig {
 }
 
 const DEFAULT_CONFIG: TrainingConfig = {
-    networkDimensions: [5, 4, 3],
+    networkDimensions: [5, 4, 2],
     populationCount: 10,
     keepCount: 2,
     maxGenerationIterations: 10,

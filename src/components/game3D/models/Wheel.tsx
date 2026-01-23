@@ -43,7 +43,9 @@ export const Wheel = forwardRef<Group, WheelProps>(({ leftSide, radius = 0.7, me
     <group ref={ref} scale={1.2} >
       <group 
         position={[meshOffset[0], meshOffset[1], meshOffset[2]]}
-        rotation={[0, 0, ((leftSide ? 1 : -1) * Math.PI) / 2]}>
+        rotation={[0, 0, ((leftSide ? 1 : -1) * Math.PI) / 2]}
+        scale-y={3}
+        >
         <mesh material={Rubber} geometry={nodes.wheel_1.geometry} />
         <mesh material={Steel} geometry={nodes.wheel_2.geometry} />
         <mesh material={Chrom} geometry={nodes.wheel_3.geometry} />

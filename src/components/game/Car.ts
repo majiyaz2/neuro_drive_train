@@ -133,8 +133,11 @@ export class Car extends Container {
             }
 
             // Handle braking - if brake output is high, decrease speed faster
-            if (brake > 0.5) {
-                this.speed -= this.config.deceleration * 6; // Brake at 3x deceleration
+            if(brake){
+
+                if (brake > 0.5) {
+                    this.speed -= this.config.deceleration * 6; // Brake at 3x deceleration
+                }
             }
 
             // Handle acceleration
