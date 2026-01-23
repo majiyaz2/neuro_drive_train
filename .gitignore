@@ -43,3 +43,25 @@ Migration.md
 migration_network.md
 presentation.md
 countdown.html
+# Dependencies
+node_modules
+
+# Hardhat files
+/cache
+/artifacts
+# Optionally, ignore the build-info directory within artifacts to save space but keep other artifacts
+# artifacts/build-info
+
+# Environment variables
+.env
+
+# TypeChain files (if used)
+/typechain
+/typechain-types
+
+# Test coverage
+/coverage
+/coverage.json
+
+# Hardhat Ignition (for deployments against a local node)
+ignition/deployments/chain-11155111
